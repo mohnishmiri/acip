@@ -1,0 +1,36 @@
+---
+# Source: acip/templates/ingress.yaml
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: acip
+  labels:
+    helm.sh/chart: acip-1.0.0
+    app.kubernetes.io/name: acip
+    app.kubernetes.io/instance: acip
+    app.kubernetes.io/version: "1.0.0"
+    app.kubernetes.io/managed-by: Helm
+    app.kubernetes.io/part-of: acip
+spec:
+  ingressClassName: webapprouting.kubernetes.azure.com
+  tls:
+    - hosts: ["acip-dev.example.com"]
+      secretName: acip-dev-tls
+  rules:
+    - host: "acip-dev.example.com"
+      http:
+        paths:
+          # API (and its OpenAPI docs under /api/docs) goes straight to the backend service
+          - path: /api
+            pathType: Prefix
+            backend:
+              service:
+                name: acip-backend
+                port: { number: 8000 }
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: acip-frontend
+                port: { number: 3000 }
+

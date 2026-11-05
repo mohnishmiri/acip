@@ -1,0 +1,19 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentParameters.json#",
+  "contentVersion": "1.0.0.0",
+  "parameters": {
+    "environmentName": { "value": "prod" },
+    "prefix": { "value": "acip" },
+    "collectorPrincipalObjectId": { "value": "00000000-0000-0000-0000-000000000000" },
+    "postgresAdminLogin": { "value": "acipadmin" },
+    "postgresAdminPassword": {
+      "reference": {
+        "keyVault": { "id": "/subscriptions/<platform-subscription-id>/resourceGroups/<rg>/providers/Microsoft.KeyVault/vaults/<bootstrap-vault>" },
+        "secretName": "acip-postgres-admin-password"
+      }
+    },
+    "postgresHighAvailability": { "value": true },
+    "privateNetworking": { "value": true },
+    "tags": { "value": { "costCenter": "<cost-center>", "owner": "<team-email>" } }
+  }
+}

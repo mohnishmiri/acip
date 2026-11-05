@@ -1,0 +1,23 @@
+# Development cluster: demo data allowed, authentication may be disabled for internal testing.
+config:
+  APP_ENV: development
+  LOG_LEVEL: DEBUG
+  CORS_ORIGINS: "https://acip-dev.example.com"
+  DEMO_MODE: "true"
+  APP_AUTH_MODE: disabled
+  AZURE_AUTH_MODE: workload_identity
+  EXPORT_SOURCE: auto
+backend:
+  replicas: 1
+  autoscaling: { enabled: false }
+  pdb: { enabled: false }
+frontend:
+  replicas: 1
+  autoscaling: { enabled: false }
+  pdb: { enabled: false }
+keyVault:
+  name: kv-acip-dev
+ingress:
+  host: acip-dev.example.com
+  tls:
+    secretName: acip-dev-tls

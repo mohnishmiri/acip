@@ -1,0 +1,208 @@
+---
+# Source: acip/templates/jobs.yaml
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: acip-migrate
+  labels:
+    helm.sh/chart: acip-1.0.0
+    app.kubernetes.io/name: acip
+    app.kubernetes.io/instance: acip
+    app.kubernetes.io/version: "1.0.0"
+    app.kubernetes.io/managed-by: Helm
+    app.kubernetes.io/part-of: acip
+  annotations:
+    helm.sh/hook: pre-install,pre-upgrade
+    helm.sh/hook-weight: "-20"
+    helm.sh/hook-delete-policy: before-hook-creation
+    azure.workload.identity/client-id: "00000000-0000-0000-0000-000000000000"
+    azure.workload.identity/tenant-id: "00000000-0000-0000-0000-000000000000"
+automountServiceAccountToken: false
+---
+# Source: acip/templates/jobs.yaml
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: acip-migrate
+  labels:
+    helm.sh/chart: acip-1.0.0
+    app.kubernetes.io/name: acip
+    app.kubernetes.io/instance: acip
+    app.kubernetes.io/version: "1.0.0"
+    app.kubernetes.io/managed-by: Helm
+    app.kubernetes.io/part-of: acip
+    app.kubernetes.io/component: migrate
+  annotations:
+    helm.sh/hook: pre-install,pre-upgrade
+    helm.sh/hook-weight: "-10"
+    helm.sh/hook-delete-policy: before-hook-creation,hook-succeeded
+spec:
+  backoffLimit: 2
+  activeDeadlineSeconds: 900
+  ttlSecondsAfterFinished: 86400
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: acip
+        app.kubernetes.io/instance: acip
+        app.kubernetes.io/component: migrate
+        
+        azure.workload.identity/use: "true"
+    spec:
+      restartPolicy: Never
+      serviceAccountName: acip-migrate
+      securityContext:
+        fsGroup: 10001
+        runAsGroup: 10001
+        runAsNonRoot: true
+        runAsUser: 10001
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: migrate
+          image: acip-backend:1.0.0
+          imagePullPolicy: IfNotPresent
+          command: ["/bin/sh", "-c"]
+          args: ['export DATABASE_URL="$(cat /mnt/secrets-store/acip-database-url)" && exec python -m app.cli migrate']
+          env:
+            - name: LOG_FORMAT
+              value: json
+            - name: PYTHONDONTWRITEBYTECODE
+              value: "1"
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop:
+              - ALL
+            readOnlyRootFilesystem: true
+          resources:
+            requests: { cpu: 100m, memory: 256Mi }
+            limits: { cpu: "1", memory: 512Mi }
+          volumeMounts:
+            - name: tmp
+              mountPath: /tmp
+            - name: secrets-store
+              mountPath: /mnt/secrets-store
+              readOnly: true
+      volumes:
+        - name: tmp
+          emptyDir: {}
+        - name: secrets-store
+          csi:
+            driver: secrets-store.csi.k8s.io
+            readOnly: true
+            volumeAttributes:
+              secretProviderClass: acip-migrate-kv
+---
+# Source: acip/templates/jobs.yaml
+# Init hook (post-install / post-upgrade): reference data, subscription registration from
+# AZURE_SUBSCRIPTIONS_CONFIG, and DEMO DATA only when DEMO_MODE=true. Idempotent.
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: acip-init
+  labels:
+    helm.sh/chart: acip-1.0.0
+    app.kubernetes.io/name: acip
+    app.kubernetes.io/instance: acip
+    app.kubernetes.io/version: "1.0.0"
+    app.kubernetes.io/managed-by: Helm
+    app.kubernetes.io/part-of: acip
+    app.kubernetes.io/component: init
+  annotations:
+    helm.sh/hook: post-install,post-upgrade
+    helm.sh/hook-weight: "0"
+    helm.sh/hook-delete-policy: before-hook-creation,hook-succeeded
+spec:
+  backoffLimit: 2
+  activeDeadlineSeconds: 1800
+  ttlSecondsAfterFinished: 86400
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: acip
+        app.kubernetes.io/instance: acip
+        app.kubernetes.io/component: init
+        
+        azure.workload.identity/use: "true"
+    spec:
+      restartPolicy: Never
+      serviceAccountName: acip
+      securityContext:
+        fsGroup: 10001
+        runAsGroup: 10001
+        runAsNonRoot: true
+        runAsUser: 10001
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: init
+          image: acip-backend:1.0.0
+          imagePullPolicy: IfNotPresent
+          command: ["/bin/sh", "-c"]
+          args: ['export DATABASE_URL="$(cat /mnt/secrets-store/acip-database-url)" && exec python -m app.cli init']
+          envFrom:
+            - configMapRef:
+                name: acip-config
+          env:
+            - name: PYTHONDONTWRITEBYTECODE
+              value: "1"
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop:
+              - ALL
+            readOnlyRootFilesystem: true
+          resources:
+            requests: { cpu: 250m, memory: 512Mi }
+            limits: { cpu: "2", memory: 2Gi }
+          volumeMounts:
+            - name: tmp
+              mountPath: /tmp
+            - name: exports
+              mountPath: /data/exports
+            - name: secrets-store
+              mountPath: /mnt/secrets-store
+              readOnly: true
+      volumes:
+        - name: tmp
+          emptyDir: {}
+        - name: exports
+          emptyDir:
+            sizeLimit: 8Gi
+        - name: secrets-store
+          csi:
+            driver: secrets-store.csi.k8s.io
+            readOnly: true
+            volumeAttributes:
+              secretProviderClass: acip-kv
+
+---
+# Source: acip/templates/jobs.yaml
+apiVersion: secrets-store.csi.x-k8s.io/v1
+kind: SecretProviderClass
+metadata:
+  name: acip-migrate-kv
+  labels:
+    helm.sh/chart: acip-1.0.0
+    app.kubernetes.io/name: acip
+    app.kubernetes.io/instance: acip
+    app.kubernetes.io/version: "1.0.0"
+    app.kubernetes.io/managed-by: Helm
+    app.kubernetes.io/part-of: acip
+  annotations:
+    helm.sh/hook: pre-install,pre-upgrade
+    helm.sh/hook-weight: "-20"
+    helm.sh/hook-delete-policy: before-hook-creation
+spec:
+  provider: azure
+  parameters:
+    usePodIdentity: "false"
+    clientID: "00000000-0000-0000-0000-000000000000"
+    keyvaultName: "kv-acip-dev"
+    tenantId: "00000000-0000-0000-0000-000000000000"
+    objects: |
+      array:
+        - |
+          objectName: acip-database-url
+          objectType: secret

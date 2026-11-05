@@ -1,0 +1,40 @@
+---
+# Source: acip/templates/configmap.yaml
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: acip-config
+  labels:
+    helm.sh/chart: acip-1.0.0
+    app.kubernetes.io/name: acip
+    app.kubernetes.io/instance: acip
+    app.kubernetes.io/version: "1.0.0"
+    app.kubernetes.io/managed-by: Helm
+    app.kubernetes.io/part-of: acip
+data:
+  ANALYTICS_INTERVAL_MINUTES: "360"
+  APP_AUTH_MODE: "disabled"
+  APP_ENV: "development"
+  AZURE_AUTH_MODE: "workload_identity"
+  AZURE_COST_EXPORT_CONTAINER: "cost-exports"
+  AZURE_HTTP_TIMEOUT_SECONDS: "30"
+  AZURE_STORAGE_ACCOUNT_URL: "https://<storageaccount>.blob.core.windows.net"
+  CORS_ORIGINS: "https://acip-dev.example.com"
+  DB_MAX_OVERFLOW: "10"
+  DB_POOL_SIZE: "10"
+  DB_STATEMENT_TIMEOUT_MS: "60000"
+  DEMO_MODE: "true"
+  ENTRA_API_CLIENT_ID: "00000000-0000-0000-0000-000000000000"
+  ENTRA_API_SCOPE: "api://00000000-0000-0000-0000-000000000000/access_as_user"
+  ENTRA_SPA_CLIENT_ID: "00000000-0000-0000-0000-000000000000"
+  ENTRA_TENANT_ID: "00000000-0000-0000-0000-000000000000"
+  EXPORT_DISCOVERY_INTERVAL_MINUTES: "60"
+  EXPORT_SOURCE: "auto"
+  INGESTION_REJECT_THRESHOLD_PCT: "1.0"
+  JOB_MAX_ATTEMPTS: "3"
+  JOB_RETRY_BACKOFF_SECONDS: "60"
+  JOB_STALE_AFTER_MINUTES: "60"
+  LOCAL_EXPORT_ROOT: "/data/exports"
+  LOG_FORMAT: "json"
+  LOG_LEVEL: "DEBUG"
+  WORKER_POLL_INTERVAL_SECONDS: "5"

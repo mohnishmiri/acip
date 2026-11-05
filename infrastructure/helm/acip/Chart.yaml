@@ -1,0 +1,9 @@
+apiVersion: v2
+name: acip
+description: Azure Cost Intelligence Platform (frontend, API, ingestion worker) for Azure Kubernetes Service
+type: application
+version: 1.0.0
+appVersion: "1.0.0"
+keywords: [azure, finops, cost-management, aks]
+maintainers:
+  - name: ACIP platform team

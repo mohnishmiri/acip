@@ -1,0 +1,70 @@
+{
+  "_comment": "Copy to config/subscriptions.json (git-ignored) and replace every placeholder. Loaded by `python -m app.cli init` when AZURE_SUBSCRIPTIONS_CONFIG=/config/subscriptions.json. Subscriptions can also be managed in Administration & Settings without restarting.",
+  "applications": [
+    { "code": "app1", "name": "Application 1", "description": "<description>", "owner": "<team-email>", "sort_order": 10 },
+    { "code": "app2", "name": "Application 2", "description": "<description>", "owner": "<team-email>", "sort_order": 20 },
+    { "code": "app3", "name": "Application 3", "description": "<description>", "owner": "<team-email>", "sort_order": 30 }
+  ],
+  "subscriptions": [
+    {
+      "application": "app1",
+      "environment": "production",
+      "subscription_id": "11111111-1111-1111-1111-111111111111",
+      "subscription_name": "<Subscription 1 name>",
+      "tenant_id": "00000000-0000-0000-0000-000000000000",
+      "billing_currency": "USD",
+      "enabled": true,
+      "exports": [
+        { "dataset_type": "actual", "export_name": "acip-actual-daily", "container": "cost-exports", "root_folder_path": "subscriptions/11111111-1111-1111-1111-111111111111/actual" },
+        { "dataset_type": "actual", "export_name": "acip-actual-lastmonth", "container": "cost-exports", "root_folder_path": "subscriptions/11111111-1111-1111-1111-111111111111/actual" },
+        { "dataset_type": "amortized", "export_name": "acip-amortized-daily", "container": "cost-exports", "root_folder_path": "subscriptions/11111111-1111-1111-1111-111111111111/amortized" },
+        { "dataset_type": "amortized", "export_name": "acip-amortized-lastmonth", "container": "cost-exports", "root_folder_path": "subscriptions/11111111-1111-1111-1111-111111111111/amortized" }
+      ]
+    },
+    {
+      "application": "app1",
+      "environment": "non_production",
+      "subscription_id": "22222222-2222-2222-2222-222222222222",
+      "subscription_name": "<Subscription 2 name>",
+      "tenant_id": "00000000-0000-0000-0000-000000000000",
+      "billing_currency": "USD",
+      "enabled": true
+    },
+    {
+      "application": "app2",
+      "environment": "production",
+      "subscription_id": "33333333-3333-3333-3333-333333333333",
+      "subscription_name": "<Subscription 3 name>",
+      "tenant_id": "00000000-0000-0000-0000-000000000000",
+      "billing_currency": "USD",
+      "enabled": true
+    },
+    {
+      "application": "app2",
+      "environment": "non_production",
+      "subscription_id": "44444444-4444-4444-4444-444444444444",
+      "subscription_name": "<Subscription 4 name>",
+      "tenant_id": "00000000-0000-0000-0000-000000000000",
+      "billing_currency": "USD",
+      "enabled": true
+    },
+    {
+      "application": "app3",
+      "environment": "production",
+      "subscription_id": "55555555-5555-5555-5555-555555555555",
+      "subscription_name": "<Subscription 5 name>",
+      "tenant_id": "00000000-0000-0000-0000-000000000000",
+      "billing_currency": "USD",
+      "enabled": true
+    },
+    {
+      "application": "app3",
+      "environment": "non_production",
+      "subscription_id": "66666666-6666-6666-6666-666666666666",
+      "subscription_name": "<Subscription 6 name>",
+      "tenant_id": "00000000-0000-0000-0000-000000000000",
+      "billing_currency": "USD",
+      "enabled": true
+    }
+  ]
+}

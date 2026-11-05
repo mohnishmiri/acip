@@ -1,0 +1,26 @@
+# Production: Entra sign-in, no demo data, managed PostgreSQL, Key Vault secrets, HA replicas.
+config:
+  APP_ENV: production
+  LOG_LEVEL: INFO
+  CORS_ORIGINS: "https://acip.example.com"
+  DEMO_MODE: "false"
+  APP_AUTH_MODE: entra
+  AZURE_AUTH_MODE: workload_identity
+  EXPORT_SOURCE: azure_blob
+backend:
+  replicas: 3
+  autoscaling: { enabled: true, minReplicas: 3, maxReplicas: 8 }
+  pdb: { enabled: true, minAvailable: 2 }
+worker:
+  replicas: 2
+frontend:
+  replicas: 2
+  autoscaling: { enabled: true, minReplicas: 2, maxReplicas: 6 }
+keyVault:
+  name: kv-acip-prod
+networkPolicy:
+  enabled: true
+ingress:
+  host: acip.example.com
+  tls:
+    secretName: acip-tls

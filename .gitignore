@@ -1,0 +1,39 @@
+# secrets & local configuration
+.env
+.env.*
+!.env.example
+*.pem
+*.pfx
+*.key
+config/subscriptions.json
+**/credentials*.json
+**/*secret*
+!**/secretproviderclass.yaml
+!**/*secret*.example*
+
+# python
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.ruff_cache/
+.venv/
+.coverage
+htmlcov/
+
+# node / next
+node_modules/
+.next/
+out/
+frontend/test-results/
+frontend/playwright-report/
+*.tsbuildinfo
+next-env.d.ts
+
+# os / editors
+.DS_Store
+.idea/
+.vscode/
+
+# local data
+data/
+exports/

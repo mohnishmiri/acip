@@ -1,0 +1,71 @@
+# Ingestion worker: no Service (it only makes outbound calls to PostgreSQL and Azure).
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "acip.fullname" . }}-worker
+  labels:
+    {{- include "acip.labels" . | nindent 4 }}
+    app.kubernetes.io/component: worker
+spec:
+  {{- if not .Values.worker.autoscaling.enabled }}
+  replicas: {{ .Values.worker.replicas }}
+  {{- end }}
+  revisionHistoryLimit: 5
+  selector:
+    matchLabels:
+      {{- include "acip.selectorLabels" (dict "ctx" . "component" "worker") | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "acip.selectorLabels" (dict "ctx" . "component" "worker") | nindent 8 }}
+        {{- include "acip.workloadIdentityLabel" . | nindent 8 }}
+      annotations:
+        checksum/config: {{ include (print $.Template.BasePath "/configmap.yaml") . | sha256sum }}
+        {{- with .Values.worker.podAnnotations }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
+    spec:
+      serviceAccountName: {{ include "acip.serviceAccountName" . }}
+      # SIGTERM lets the current job finish its transaction; unfinished jobs are re-queued as stale.
+      terminationGracePeriodSeconds: 120
+      {{- with .Values.global.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      securityContext:
+        {{- toYaml .Values.podSecurityContext | nindent 8 }}
+      containers:
+        - name: worker
+          image: {{ include "acip.image" (dict "ctx" . "component" "backend") }}
+          imagePullPolicy: {{ .Values.image.backend.pullPolicy }}
+          command: ["python", "-m", "worker.main"]
+          {{- include "acip.backendEnv" . | nindent 10 }}
+            - name: WORKER_HEARTBEAT_FILE
+              value: /tmp/acip-worker-heartbeat
+          securityContext:
+            {{- toYaml .Values.containerSecurityContext | nindent 12 }}
+          livenessProbe:
+            exec:
+              command: ["python", "-m", "worker.healthcheck"]
+            initialDelaySeconds: 60
+            periodSeconds: 60
+            timeoutSeconds: 10
+            failureThreshold: 5
+          resources:
+            {{- toYaml .Values.worker.resources | nindent 12 }}
+          volumeMounts:
+            {{- include "acip.backendVolumeMounts" . | nindent 12 }}
+      volumes:
+        {{- include "acip.backendVolumes" . | nindent 8 }}
+      {{- with .Values.worker.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.worker.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.worker.affinity }}
+      affinity:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}

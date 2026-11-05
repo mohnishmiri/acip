@@ -1,0 +1,57 @@
+{{- if .Values.networkPolicy.enabled }}
+# Ingress-only isolation; egress stays open for PostgreSQL, Entra ID, ARM and Blob Storage
+# (restrict egress with Azure Firewall / NSGs at the network layer).
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: {{ include "acip.fullname" . }}-frontend
+  labels:
+    {{- include "acip.labels" . | nindent 4 }}
+spec:
+  podSelector:
+    matchLabels:
+      {{- include "acip.selectorLabels" (dict "ctx" . "component" "frontend") | nindent 6 }}
+  policyTypes: [Ingress]
+  ingress:
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              {{- toYaml .Values.networkPolicy.ingressNamespaceSelector | nindent 14 }}
+      ports:
+        - port: {{ .Values.frontend.port }}
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: {{ include "acip.fullname" . }}-backend
+  labels:
+    {{- include "acip.labels" . | nindent 4 }}
+spec:
+  podSelector:
+    matchLabels:
+      {{- include "acip.selectorLabels" (dict "ctx" . "component" "backend") | nindent 6 }}
+  policyTypes: [Ingress]
+  ingress:
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              {{- toYaml .Values.networkPolicy.ingressNamespaceSelector | nindent 14 }}
+        - podSelector:
+            matchLabels:
+              {{- include "acip.selectorLabels" (dict "ctx" . "component" "frontend") | nindent 14 }}
+      ports:
+        - port: {{ .Values.backend.port }}
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: {{ include "acip.fullname" . }}-worker
+  labels:
+    {{- include "acip.labels" . | nindent 4 }}
+spec:
+  podSelector:
+    matchLabels:
+      {{- include "acip.selectorLabels" (dict "ctx" . "component" "worker") | nindent 6 }}
+  policyTypes: [Ingress]
+  ingress: []
+{{- end }}

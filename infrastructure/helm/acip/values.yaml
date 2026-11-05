@@ -1,0 +1,196 @@
+# Default values for the Azure Cost Intelligence Platform.
+# Environment overlays: values-dev.yaml, values-staging.yaml, values-prod.yaml.
+# No secret values belong in this file: the database URL comes from a Kubernetes Secret
+# (pre-created, or synced from Azure Key Vault by the Secrets Store CSI driver).
+
+nameOverride: ""
+fullnameOverride: ""
+
+global:
+  # Registry prefix, e.g. "acracipprod.azurecr.io". AKS pulls from ACR via the kubelet identity (AcrPull).
+  imageRegistry: ""
+  imagePullSecrets: []
+
+image:
+  backend:
+    repository: acip-backend
+    tag: "1.0.0"
+    pullPolicy: IfNotPresent
+  frontend:
+    repository: acip-frontend
+    tag: "1.0.0"
+    pullPolicy: IfNotPresent
+
+# Service account used by the API and the worker. With Workload Identity the EXISTING
+# collection app registration is federated with this service account (see docs/aks-deployment.md),
+# so no client secret is stored in the cluster.
+serviceAccount:
+  create: true
+  name: ""
+  annotations: {}
+  workloadIdentity:
+    enabled: true
+    # Client (application) id of the existing collection app registration / service principal.
+    clientId: "00000000-0000-0000-0000-000000000000"
+    tenantId: "00000000-0000-0000-0000-000000000000"
+
+# Non-secret runtime configuration (rendered into a ConfigMap). Names match backend/app/core/config.py.
+config:
+  APP_ENV: production
+  LOG_LEVEL: INFO
+  LOG_FORMAT: json
+  CORS_ORIGINS: "https://acip.example.com"
+  DEMO_MODE: "false"
+  # Application user sign-in (Entra ID) -- separate identity from the collection service principal
+  APP_AUTH_MODE: entra
+  ENTRA_TENANT_ID: "00000000-0000-0000-0000-000000000000"
+  ENTRA_API_CLIENT_ID: "00000000-0000-0000-0000-000000000000"
+  ENTRA_API_AUDIENCE: ""
+  ENTRA_SPA_CLIENT_ID: "00000000-0000-0000-0000-000000000000"
+  ENTRA_API_SCOPE: "api://00000000-0000-0000-0000-000000000000/access_as_user"
+  # Cost collection (existing service principal via Workload Identity).
+  # AZURE_CLIENT_ID / AZURE_TENANT_ID / AZURE_FEDERATED_TOKEN_FILE are injected by the
+  # workload identity webhook, so they are intentionally not set here.
+  AZURE_AUTH_MODE: workload_identity
+  AZURE_STORAGE_ACCOUNT_URL: "https://<storageaccount>.blob.core.windows.net"
+  AZURE_COST_EXPORT_CONTAINER: cost-exports
+  EXPORT_SOURCE: azure_blob
+  LOCAL_EXPORT_ROOT: /data/exports
+  AZURE_HTTP_TIMEOUT_SECONDS: "30"
+  # Worker / ingestion tuning
+  WORKER_POLL_INTERVAL_SECONDS: "5"
+  EXPORT_DISCOVERY_INTERVAL_MINUTES: "60"
+  ANALYTICS_INTERVAL_MINUTES: "360"
+  JOB_MAX_ATTEMPTS: "3"
+  JOB_RETRY_BACKOFF_SECONDS: "60"
+  JOB_STALE_AFTER_MINUTES: "60"
+  INGESTION_REJECT_THRESHOLD_PCT: "1.0"
+  DB_POOL_SIZE: "10"
+  DB_MAX_OVERFLOW: "10"
+  DB_STATEMENT_TIMEOUT_MS: "60000"
+
+# Optional: subscriptions/applications registered at start-up by the init job
+# (AZURE_SUBSCRIPTIONS_CONFIG). Subscriptions can also be managed in the Administration UI.
+subscriptionsConfig:
+  enabled: false
+  # JSON document, see config/subscriptions.example.json
+  json: |
+    {"applications": [], "subscriptions": []}
+
+database:
+  # Name of the Secret holding the SQLAlchemy URL, e.g.
+  # postgresql+psycopg://acip_app:<password>@<server>.postgres.database.azure.com:5432/acip?sslmode=require
+  # Leave empty to use "<fullname>-db" (created by keyVault sync below, or by you).
+  secretName: ""
+  secretKey: DATABASE_URL
+
+# Azure Key Vault via the Secrets Store CSI driver (AKS add-on azureKeyvaultSecretsProvider).
+keyVault:
+  enabled: true
+  name: "kv-acip-prod"
+  tenantId: "00000000-0000-0000-0000-000000000000"
+  # Identity used by the CSI driver; defaults to serviceAccount.workloadIdentity.clientId.
+  clientId: ""
+  # Key Vault secret name -> key in the synced Kubernetes Secret
+  databaseUrlSecretName: acip-database-url
+
+backend:
+  replicas: 2
+  port: 8000
+  resources:
+    requests: { cpu: 250m, memory: 384Mi }
+    limits: { cpu: "1", memory: 1Gi }
+  autoscaling:
+    enabled: true
+    minReplicas: 2
+    maxReplicas: 6
+    targetCPUUtilizationPercentage: 70
+  pdb:
+    enabled: true
+    minAvailable: 1
+  podAnnotations: {}
+  nodeSelector: {}
+  tolerations: []
+  affinity: {}
+
+worker:
+  # Any number of replicas can claim jobs (FOR UPDATE SKIP LOCKED); one is elected scheduler.
+  replicas: 1
+  resources:
+    requests: { cpu: 250m, memory: 512Mi }
+    limits: { cpu: "2", memory: 2Gi }
+  # Scratch space for downloaded export files (emptyDir, size limit)
+  scratchSizeLimit: 8Gi
+  autoscaling:
+    enabled: false
+    minReplicas: 1
+    maxReplicas: 3
+    targetCPUUtilizationPercentage: 75
+  podAnnotations: {}
+  nodeSelector: {}
+  tolerations: []
+  affinity: {}
+
+frontend:
+  replicas: 2
+  port: 3000
+  resources:
+    requests: { cpu: 100m, memory: 192Mi }
+    limits: { cpu: 500m, memory: 512Mi }
+  autoscaling:
+    enabled: true
+    minReplicas: 2
+    maxReplicas: 4
+    targetCPUUtilizationPercentage: 70
+  pdb:
+    enabled: true
+    minAvailable: 1
+  podAnnotations: {}
+  nodeSelector: {}
+  tolerations: []
+  affinity: {}
+
+# Database migrations run as a Helm pre-install/pre-upgrade hook (alembic upgrade head).
+migrations:
+  enabled: true
+  backoffLimit: 2
+  activeDeadlineSeconds: 900
+
+# Init job (post-install/post-upgrade hook): seeds reference data (environments, roles,
+# default rules), registers subscriptions from subscriptionsConfig and -- only when
+# DEMO_MODE=true -- generates DEMO DATA. Idempotent.
+init:
+  enabled: true
+  backoffLimit: 2
+  activeDeadlineSeconds: 1800
+
+ingress:
+  enabled: true
+  # AKS application routing add-on: webapprouting.kubernetes.azure.com ; or "nginx"
+  className: webapprouting.kubernetes.azure.com
+  host: acip.example.com
+  annotations: {}
+  tls:
+    enabled: true
+    # Secret with the TLS certificate (e.g. synced from Key Vault or issued by cert-manager)
+    secretName: acip-tls
+
+networkPolicy:
+  enabled: false
+  # Namespace label of the ingress controller allowed to reach frontend/backend
+  ingressNamespaceSelector:
+    kubernetes.io/metadata.name: app-routing-system
+
+podSecurityContext:
+  runAsNonRoot: true
+  runAsUser: 10001
+  runAsGroup: 10001
+  fsGroup: 10001
+  seccompProfile:
+    type: RuntimeDefault
+
+containerSecurityContext:
+  allowPrivilegeEscalation: false
+  readOnlyRootFilesystem: true
+  capabilities:
+    drop: ["ALL"]

@@ -1,0 +1,16 @@
+Azure Cost Intelligence Platform {{ .Chart.AppVersion }} deployed as "{{ .Release.Name }}" in namespace {{ .Release.Namespace }}.
+
+{{- if .Values.ingress.enabled }}
+URL:      https://{{ .Values.ingress.host }}
+API docs: https://{{ .Values.ingress.host }}/api/docs
+{{- end }}
+
+Verify:
+  kubectl -n {{ .Release.Namespace }} get pods -l app.kubernetes.io/instance={{ .Release.Name }}
+  kubectl -n {{ .Release.Namespace }} logs deploy/{{ include "acip.fullname" . }}-worker --tail=50
+  kubectl -n {{ .Release.Namespace }} port-forward svc/{{ include "acip.fullname" . }}-backend 8000:{{ .Values.backend.port }}
+  curl -s localhost:8000/health/ready
+
+Cost collection identity: AZURE_AUTH_MODE={{ .Values.config.AZURE_AUTH_MODE }} (service account {{ include "acip.serviceAccountName" . }}).
+Demo data: DEMO_MODE={{ .Values.config.DEMO_MODE }}
+Rollback:  helm rollback {{ .Release.Name }} <revision> -n {{ .Release.Namespace }}

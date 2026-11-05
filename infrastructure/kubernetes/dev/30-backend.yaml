@@ -1,0 +1,144 @@
+---
+# Source: acip/templates/backend.yaml
+apiVersion: v1
+kind: Service
+metadata:
+  name: acip-backend
+  labels:
+    helm.sh/chart: acip-1.0.0
+    app.kubernetes.io/name: acip
+    app.kubernetes.io/instance: acip
+    app.kubernetes.io/version: "1.0.0"
+    app.kubernetes.io/managed-by: Helm
+    app.kubernetes.io/part-of: acip
+    app.kubernetes.io/component: backend
+spec:
+  type: ClusterIP
+  selector:
+    app.kubernetes.io/name: acip
+    app.kubernetes.io/instance: acip
+    app.kubernetes.io/component: backend
+  ports:
+    - name: http
+      port: 8000
+      targetPort: http
+
+---
+# Source: acip/templates/backend.yaml
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: acip-backend
+  labels:
+    helm.sh/chart: acip-1.0.0
+    app.kubernetes.io/name: acip
+    app.kubernetes.io/instance: acip
+    app.kubernetes.io/version: "1.0.0"
+    app.kubernetes.io/managed-by: Helm
+    app.kubernetes.io/part-of: acip
+    app.kubernetes.io/component: backend
+spec:
+  replicas: 1
+  revisionHistoryLimit: 5
+  strategy:
+    type: RollingUpdate
+    rollingUpdate: { maxSurge: 1, maxUnavailable: 0 }
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: acip
+      app.kubernetes.io/instance: acip
+      app.kubernetes.io/component: backend
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: acip
+        app.kubernetes.io/instance: acip
+        app.kubernetes.io/component: backend
+        
+        azure.workload.identity/use: "true"
+      annotations:
+        checksum/config: 416fed14c2af49d80612e7f54d58e4721cc57c0927f131986c714552dc5d96b3
+    spec:
+      serviceAccountName: acip
+      securityContext:
+        fsGroup: 10001
+        runAsGroup: 10001
+        runAsNonRoot: true
+        runAsUser: 10001
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: api
+          image: acip-backend:1.0.0
+          imagePullPolicy: IfNotPresent
+          command: ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000", "--proxy-headers", "--forwarded-allow-ips", "*"]
+          ports:
+            - name: http
+              containerPort: 8000
+          envFrom:
+            - configMapRef:
+                name: acip-config
+          env:
+            - name: DATABASE_URL
+              valueFrom:
+                secretKeyRef:
+                  name: acip-db
+                  key: DATABASE_URL
+            - name: PYTHONDONTWRITEBYTECODE
+              value: "1"
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop:
+              - ALL
+            readOnlyRootFilesystem: true
+          startupProbe:
+            httpGet: { path: /health/live, port: http }
+            periodSeconds: 5
+            failureThreshold: 24
+          readinessProbe:
+            httpGet: { path: /health/ready, port: http }
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 3
+          livenessProbe:
+            httpGet: { path: /health/live, port: http }
+            periodSeconds: 20
+            timeoutSeconds: 5
+            failureThreshold: 3
+          resources:
+            limits:
+              cpu: "1"
+              memory: 1Gi
+            requests:
+              cpu: 250m
+              memory: 384Mi
+          volumeMounts:
+            - name: tmp
+              mountPath: /tmp
+            - name: exports
+              mountPath: /data/exports
+            - name: secrets-store
+              mountPath: /mnt/secrets-store
+              readOnly: true
+      volumes:
+        - name: tmp
+          emptyDir: {}
+        - name: exports
+          emptyDir:
+            sizeLimit: 8Gi
+        - name: secrets-store
+          csi:
+            driver: secrets-store.csi.k8s.io
+            readOnly: true
+            volumeAttributes:
+              secretProviderClass: acip-kv
+      topologySpreadConstraints:
+        - maxSkew: 1
+          topologyKey: topology.kubernetes.io/zone
+          whenUnsatisfiable: ScheduleAnyway
+          labelSelector:
+            matchLabels:
+              app.kubernetes.io/name: acip
+              app.kubernetes.io/instance: acip
+              app.kubernetes.io/component: backend
