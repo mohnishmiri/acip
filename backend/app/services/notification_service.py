@@ -1,9 +1,9 @@
-"""In-app notifications with de-duplication, designed for additional channels.
+"""Notifications with de-duplication: in-app (always) and email (per alert rule).
 
-Each notification has a ``dedup_key`` (e.g. ``anomaly:123``); the same unresolved issue
-never produces a second notification. Channels implement ``NotificationChannel`` --
-in-app is built in; Microsoft Teams (incoming webhook / Graph) and email are extension
-points that are deliberately not enabled in the initial read-only release.
+Each notification has a ``dedup_key`` (e.g. ``anomaly:123``); the same unresolved issue never
+produces a second notification -- and therefore never a second email. Email deliveries are
+queued here and sent by the worker (``app.services.email.delivery``). Microsoft Teams remains
+an extension point.
 """
 
 from __future__ import annotations
@@ -46,15 +46,7 @@ class TeamsChannel:
         return "not_configured"
 
 
-class EmailChannel:
-    name = "email"
-
-    def deliver(self, notification: NotificationHistory) -> str:
-        log.info("Email channel not configured; notification kept in-app only", extra={"dedup_key": notification.dedup_key})
-        return "not_configured"
-
-
-CHANNELS: dict[str, NotificationChannel] = {c.name: c for c in (InAppChannel(), TeamsChannel(), EmailChannel())}
+CHANNELS: dict[str, NotificationChannel] = {c.name: c for c in (InAppChannel(), TeamsChannel())}
 
 
 def notify(
@@ -94,8 +86,13 @@ def notify(
     if new_id is None:
         return False
     n = db.get(NotificationHistory, new_id)
-    for ch in (rule.channels if rule else ["in_app"]) or ["in_app"]:
-        if ch != "in_app" and ch in CHANNELS:
+    channels = (rule.channels if rule else ["in_app"]) or ["in_app"]
+    for ch in channels:
+        if ch == "email":
+            from app.services.email.delivery import queue_email
+
+            queue_email(db, n.id, list(rule.email_recipients or []) if rule else [])  # sent by the worker
+        elif ch != "in_app" and ch in CHANNELS:
             n.delivery_status = CHANNELS[ch].deliver(n) if n.delivery_status == "delivered" else n.delivery_status
     return True
 

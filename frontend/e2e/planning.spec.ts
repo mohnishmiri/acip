@@ -54,6 +54,7 @@ test.describe("Operations", () => {
   test("alerts list and rules", async ({ page }) => {
     await page.goto("/alerts");
     await expect(page.getByTestId("notifications-table")).toBeVisible();
+    await expect(page.getByTestId("email-delivery-panel")).toContainText("Email delivery");
     await page.getByTestId("tab-alert-rules").click();
     await expect(page.getByTestId("alert-rules-table")).toContainText("Cost anomalies");
   });

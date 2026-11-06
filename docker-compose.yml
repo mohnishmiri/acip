@@ -28,6 +28,21 @@ x-backend-env: &backend-env
   EXPORT_SOURCE: ${EXPORT_SOURCE:-auto}
   LOCAL_EXPORT_ROOT: /data/exports
   EXPORT_DISCOVERY_INTERVAL_MINUTES: ${EXPORT_DISCOVERY_INTERVAL_MINUTES:-60}
+  # alert emails -- locally they go to Mailpit (http://localhost:8025) and never leave the machine
+  EMAIL_PROVIDER: ${EMAIL_PROVIDER:-smtp}
+  EMAIL_FROM_ADDRESS: ${EMAIL_FROM_ADDRESS:-acip-alerts@example.com}
+  EMAIL_FROM_NAME: ${EMAIL_FROM_NAME:-Azure Cost Intelligence}
+  EMAIL_REPLY_TO: ${EMAIL_REPLY_TO:-}
+  SMTP_HOST: ${SMTP_HOST:-mailpit}
+  SMTP_PORT: ${SMTP_PORT:-1025}
+  SMTP_SECURITY: ${SMTP_SECURITY:-none}
+  SMTP_USERNAME: ${SMTP_USERNAME:-}
+  SMTP_PASSWORD: ${SMTP_PASSWORD:-}
+  GRAPH_MAIL_TENANT_ID: ${GRAPH_MAIL_TENANT_ID:-}
+  GRAPH_MAIL_CLIENT_ID: ${GRAPH_MAIL_CLIENT_ID:-}
+  GRAPH_MAIL_CLIENT_SECRET: ${GRAPH_MAIL_CLIENT_SECRET:-}
+  GRAPH_MAIL_SENDER: ${GRAPH_MAIL_SENDER:-}
+  APP_PUBLIC_URL: ${APP_PUBLIC_URL:-http://localhost:3000}
 
 services:
   postgres:
@@ -46,6 +61,16 @@ services:
       interval: 5s
       timeout: 5s
       retries: 20
+    restart: unless-stopped
+
+  # Local mail catcher: every email the platform sends is visible at http://localhost:8025
+  mailpit:
+    image: axllent/mailpit:v1.27
+    ports:
+      - "${MAILPIT_UI_PORT:-8025}:8025"
+    environment:
+      MP_SMTP_AUTH_ACCEPT_ANY: "true"
+      MP_SMTP_AUTH_ALLOW_INSECURE: "true"
     restart: unless-stopped
 
   # one-shot: wait for DB, run migrations, seed reference data, register subscriptions, seed demo data

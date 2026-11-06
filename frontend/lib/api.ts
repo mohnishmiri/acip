@@ -57,6 +57,22 @@ export async function api<T>(path: string, opts: { params?: Params; method?: str
   return data as T;
 }
 
+/** Fetch a non-JSON body (e.g. a rendered email) with the same auth headers as api(). */
+export async function apiText(path: string, params?: Params): Promise<string> {
+  const res = await fetch(`/api/v1${path}${toQuery(params)}`, { headers: await headers(false), cache: "no-store" });
+  const text = await res.text();
+  if (!res.ok) {
+    let msg = `Request failed (${res.status})`;
+    try {
+      msg = JSON.parse(text).error?.message ?? msg;
+    } catch {
+      /* non-JSON */
+    }
+    throw new ApiError(res.status, "error", msg);
+  }
+  return text;
+}
+
 export async function download(path: string, params?: Params): Promise<void> {
   const res = await fetch(`/api/v1${path}${toQuery(params)}`, { headers: await headers(false) });
   if (!res.ok) {

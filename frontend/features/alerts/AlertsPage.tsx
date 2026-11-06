@@ -3,6 +3,7 @@ import AddIcon from "@mui/icons-material/Add";
 import DeleteOutlineIcon from "@mui/icons-material/DeleteOutline";
 import DoneAllIcon from "@mui/icons-material/DoneAll";
 import EditOutlinedIcon from "@mui/icons-material/EditOutlined";
+import MailOutlineIcon from "@mui/icons-material/MailOutline";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { Alert, Box, Button, Grid, IconButton, Link as MuiLink, MenuItem, Select, Stack, Tab, Tabs, ToggleButton, ToggleButtonGroup, Tooltip, Typography } from "@mui/material";
 import { useQueryClient } from "@tanstack/react-query";
@@ -21,6 +22,7 @@ import { dateTime, titleCase } from "@/lib/format";
 import { useApi, useFilterOptions } from "@/services/queries";
 import DataTable from "@/tables/DataTable";
 import { ConfirmDialog, errorMessage, FormDialog, RhfSelect, RhfSwitch, RhfText, ToastProvider, useCan, useToast } from "@/features/admin/ui";
+import { type Delivery, EMAIL_RE, EmailDeliveryPanel, EmailPreviewDialog, type EmailSettings, EmailStatusChip, parseRecipients } from "./EmailPanels";
 
 interface Notification {
   id: number;
@@ -33,6 +35,7 @@ interface Notification {
   created_at: string;
   delivery_status: string;
   is_demo: boolean;
+  deliveries?: Delivery[];
 }
 interface AlertRule {
   id: number;
@@ -42,6 +45,7 @@ interface AlertRule {
   filters: { environment_groups?: string[]; service_categories?: string[] };
   params: { min_monthly_savings?: number };
   channels: string[];
+  email_recipients: string[];
   cooldown_hours: number;
   enabled: boolean;
 }
@@ -67,11 +71,20 @@ const ruleSchema = z.object({
   environment_groups: z.array(z.string()),
   service_categories: z.array(z.string()),
   min_monthly_savings: z.number({ error: "Enter an amount" }).min(0),
+  email_recipients: z.string(),
+}).superRefine((v, ctx) => {
+  if (!v.channels.includes("email")) return;
+  const list = parseRecipients(v.email_recipients);
+  if (!list.length) ctx.addIssue({ code: "custom", path: ["email_recipients"], message: "Add at least one recipient for the email channel" });
+  const bad = list.filter((e) => !EMAIL_RE.test(e));
+  if (bad.length) ctx.addIssue({ code: "custom", path: ["email_recipients"], message: `Not a valid address: ${bad.join(", ")}` });
+  if (list.length > 50) ctx.addIssue({ code: "custom", path: ["email_recipients"], message: "At most 50 recipients" });
 });
 type RuleValues = z.infer<typeof ruleSchema>;
 
 function RuleForm({ open, rule, onClose, onSaved }: { open: boolean; rule: AlertRule | null; onClose: () => void; onSaved: (m: string) => void }) {
   const opts = useFilterOptions();
+  const emailCfg = useApi<EmailSettings>("/notifications/email-settings");
   const [error, setError] = useState<string | null>(null);
   const defaults = useMemo<RuleValues>(
     () => ({
@@ -84,6 +97,7 @@ function RuleForm({ open, rule, onClose, onSaved }: { open: boolean; rule: Alert
       environment_groups: rule?.filters?.environment_groups ?? [],
       service_categories: rule?.filters?.service_categories ?? [],
       min_monthly_savings: rule?.params?.min_monthly_savings ?? 500,
+      email_recipients: (rule?.email_recipients ?? []).join(", "),
     }),
     [rule],
   );
@@ -103,6 +117,7 @@ function RuleForm({ open, rule, onClose, onSaved }: { open: boolean; rule: Alert
       alert_type: v.alert_type,
       min_severity: v.alert_type === "anomaly" ? v.min_severity || null : null,
       channels: v.channels,
+      email_recipients: v.channels.includes("email") ? parseRecipients(v.email_recipients) : [],
       cooldown_hours: v.cooldown_hours,
       enabled: v.enabled,
       filters: { ...(v.environment_groups.length ? { environment_groups: v.environment_groups } : {}), ...(v.service_categories.length ? { service_categories: v.service_categories } : {}) },
@@ -127,7 +142,7 @@ function RuleForm({ open, rule, onClose, onSaved }: { open: boolean; rule: Alert
           <RhfSelect control={control} name="min_severity" label="Minimum severity" options={SEVERITIES.map((s) => ({ value: s, label: titleCase(s) }))} disabled={type !== "anomaly"} helperText={type !== "anomaly" ? "Applies to anomaly alerts only" : undefined} />
         </Grid>
         <Grid size={{ xs: 12, md: 7 }}>
-          <RhfSelect control={control} name="channels" label="Channels" multiple options={[{ value: "in_app", label: "In-app" }, { value: "teams", label: "Microsoft Teams (future)" }, { value: "email", label: "Email (future)" }]} />
+          <RhfSelect control={control} name="channels" label="Channels" multiple options={[{ value: "in_app", label: "In-app" }, { value: "email", label: "Email" }, { value: "teams", label: "Microsoft Teams (future)" }]} testId="alert-rule-channels" />
         </Grid>
         <Grid size={{ xs: 12, md: 5 }}>
           <RhfText control={control} name="cooldown_hours" label="Cooldown (hours)" type="number" helperText="Minimum hours between repeat notifications" />
@@ -144,8 +159,18 @@ function RuleForm({ open, rule, onClose, onSaved }: { open: boolean; rule: Alert
           </Grid>
         )}
       </Grid>
-      {channels?.some((c) => c !== "in_app") && (
-        <Alert severity="info">Microsoft Teams and email delivery are extension points and are not enabled in this release. Notifications are always stored in-app.</Alert>
+      {channels?.includes("email") && (
+        <>
+          <RhfText control={control} name="email_recipients" label="Email recipients" required multiline helperText="Addresses separated by commas or new lines (e.g. finops@contoso.com, platform-leads@contoso.com)" testId="alert-rule-recipients" />
+          <Alert severity={emailCfg.data?.enabled === false ? "warning" : "info"} variant="outlined">
+            {emailCfg.data?.enabled === false
+              ? "Email delivery is currently disabled (EMAIL_PROVIDER=disabled); recipients are saved and emails will be sent once a provider is configured."
+              : `Each new alert matching this rule is emailed once from ${emailCfg.data?.from_address ?? "the configured sender"}; ongoing issues are not re-sent. Notifications are always stored in-app as well.`}
+          </Alert>
+        </>
+      )}
+      {channels?.includes("teams") && (
+        <Alert severity="info">Microsoft Teams delivery is an extension point and is not enabled in this release.</Alert>
       )}
       <RhfSwitch control={control} name="enabled" label="Rule enabled" />
     </FormDialog>
@@ -169,6 +194,7 @@ function AlertsInner() {
   const [editing, setEditing] = useState<AlertRule | null>(null);
   const [formOpen, setFormOpen] = useState(false);
   const [deleting, setDeleting] = useState<AlertRule | null>(null);
+  const [previewId, setPreviewId] = useState<number | null>(null);
   const invalidate = () => qc.invalidateQueries({ predicate: (q) => typeof q.queryKey[0] === "string" && ["/notifications", "/alert-rules"].some((p) => (q.queryKey[0] as string).startsWith(p)) });
   const markRead = async (ids?: number[]) => {
     try {
@@ -186,7 +212,7 @@ function AlertsInner() {
       {
         accessorKey: "title",
         header: "Notification",
-        size: 420,
+        size: 370,
         enableHiding: false,
         cell: ({ row }) => (
           <Box sx={{ minWidth: 0 }}>
@@ -200,12 +226,13 @@ function AlertsInner() {
         ),
       },
       { accessorKey: "created_at", header: "Raised", size: 170, cell: ({ getValue }) => dateTime(getValue() as string) },
-      { accessorKey: "is_read", header: "State", size: 90, cell: ({ getValue }) => (getValue() ? <StatusChip value="read" tone="neutral" label="Read" /> : <StatusChip value="unread" tone="info" label="Unread" />) },
-      { accessorKey: "delivery_status", header: "Delivery", size: 110, cell: ({ getValue }) => <StatusChip value={getValue() as string} /> },
+      { accessorKey: "is_read", header: "State", size: 100, cell: ({ getValue }) => (getValue() ? <StatusChip value="read" tone="neutral" label="Read" /> : <StatusChip value="unread" tone="info" label="Unread" />) },
+      { accessorKey: "delivery_status", header: "In-app delivery", size: 120, meta: { label: "In-app delivery" }, cell: ({ getValue }) => <StatusChip value={getValue() as string} /> },
+      { id: "email", header: "Email", size: 110, accessorFn: (r) => r.deliveries?.find((d) => d.channel === "email")?.status ?? "", cell: ({ row }) => <EmailStatusChip delivery={row.original.deliveries?.find((d) => d.channel === "email")} /> },
       {
         id: "actions",
         header: "",
-        size: 170,
+        size: 210,
         enableSorting: false,
         enableHiding: false,
         cell: ({ row }) => (
@@ -220,6 +247,11 @@ function AlertsInner() {
                 Mark read
               </Button>
             )}
+            <Tooltip title="Preview the alert email">
+              <IconButton aria-label="Preview email" onClick={() => setPreviewId(row.original.id)} data-testid={`email-preview-${row.original.id}`}>
+                <MailOutlineIcon fontSize="small" />
+              </IconButton>
+            </Tooltip>
           </Stack>
         ),
       },
@@ -233,7 +265,17 @@ function AlertsInner() {
       { accessorKey: "alert_type", header: "Type", size: 230, cell: ({ getValue }) => TYPE_LABEL[getValue() as string] ?? (getValue() as string) },
       { accessorKey: "min_severity", header: "Min severity", size: 120, cell: ({ getValue }) => (getValue() ? <SeverityChip severity={getValue() as string} /> : "—") },
       { id: "filters", header: "Filters", size: 240, accessorFn: (r) => [...(r.filters.environment_groups ?? []), ...(r.filters.service_categories ?? [])].join(", "), cell: ({ getValue }) => (getValue() as string) || "All" },
-      { id: "channels", header: "Channels", size: 160, accessorFn: (r) => r.channels.map((c) => (c === "in_app" ? "In-app" : titleCase(c))).join(", ") },
+      {
+        id: "channels",
+        header: "Channels",
+        size: 160,
+        accessorFn: (r) => r.channels.map((c) => (c === "in_app" ? "In-app" : c === "email" ? `Email (${r.email_recipients?.length ?? 0})` : titleCase(c))).join(", "),
+        cell: ({ row, getValue }) => (
+          <Tooltip title={row.original.channels.includes("email") ? `Email recipients: ${(row.original.email_recipients ?? []).join(", ")}` : ""}>
+            <span>{getValue() as string}</span>
+          </Tooltip>
+        ),
+      },
       { accessorKey: "cooldown_hours", header: "Cooldown", size: 100, meta: { numeric: true }, cell: ({ getValue }) => `${getValue()} h` },
       { accessorKey: "enabled", header: "Status", size: 100, cell: ({ getValue }) => (getValue() ? <StatusChip value="ok" label="Enabled" /> : <StatusChip value="disabled" />) },
       {
@@ -266,7 +308,7 @@ function AlertsInner() {
     <Box data-testid="alerts-page">
       <PageHeader
         title="Alerts & Notifications"
-        subtitle="In-app alerts for cost anomalies, budget thresholds, forecasts, ingestion failures, delayed data and savings opportunities. Each unresolved issue notifies once (de-duplicated)."
+        subtitle="In-app and email alerts for cost anomalies, budget thresholds, forecasts, ingestion failures, delayed data and savings opportunities. Each unresolved issue notifies once (de-duplicated)."
         actions={
           s.tab === "rules" && canManage ? (
             <Button variant="contained" startIcon={<AddIcon />} onClick={() => { setEditing(null); setFormOpen(true); }} data-testid="alert-rule-new">
@@ -284,6 +326,8 @@ function AlertsInner() {
         <Tab value="rules" label="Alert rules" data-testid="tab-alert-rules" />
       </Tabs>
       {s.tab === "notifications" ? (
+        <Stack spacing={2}>
+        <EmailDeliveryPanel />
         <Section title="Notifications" subtitle={notes.data ? `${notes.data.meta.total} notifications` : " "} noPadding testId="notifications-section">
           <DataTable
             data={notes.data?.data ?? []}
@@ -314,16 +358,19 @@ function AlertsInner() {
             }
           />
         </Section>
+        </Stack>
       ) : (
         <Stack spacing={2}>
+          <EmailDeliveryPanel />
           <Alert severity="info" variant="outlined" sx={{ bgcolor: "#fff" }}>
-            Alert rules decide which detections create notifications. Anomaly detection thresholds themselves are configured under Administration → Anomaly rules. Microsoft Teams and email are designed-in extension points; this release delivers in-app only.
+            Alert rules decide which detections create notifications and who is emailed. Anomaly detection thresholds themselves are configured under Administration → Anomaly rules. Microsoft Teams is a designed-in extension point.
           </Alert>
           <Section title="Alert rules" noPadding testId="alert-rules-section">
             <DataTable data={rules.data ?? []} columns={ruleCols} loading={rules.isFetching} error={rules.error ? errorMessage(rules.error) : null} getRowId={(r) => String(r.id)} storageKey="alert-rules" testId="alert-rules-table" />
           </Section>
         </Stack>
       )}
+      <EmailPreviewDialog notificationId={previewId} onClose={() => setPreviewId(null)} />
       <RuleForm open={formOpen} rule={editing} onClose={() => setFormOpen(false)} onSaved={(m) => { setFormOpen(false); toast(m); invalidate(); }} />
       <ConfirmDialog
         open={!!deleting}

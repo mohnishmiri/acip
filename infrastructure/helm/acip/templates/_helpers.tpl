@@ -76,6 +76,20 @@ env:
       secretKeyRef:
         name: {{ include "acip.dbSecretName" . }}
         key: {{ .Values.database.secretKey }}
+  {{- if and .Values.keyVault.enabled .Values.keyVault.smtpPasswordSecretName }}
+  - name: SMTP_PASSWORD
+    valueFrom:
+      secretKeyRef:
+        name: {{ include "acip.dbSecretName" . }}
+        key: SMTP_PASSWORD
+  {{- end }}
+  {{- if and .Values.keyVault.enabled .Values.keyVault.graphMailSecretName }}
+  - name: GRAPH_MAIL_CLIENT_SECRET
+    valueFrom:
+      secretKeyRef:
+        name: {{ include "acip.dbSecretName" . }}
+        key: GRAPH_MAIL_CLIENT_SECRET
+  {{- end }}
   - name: PYTHONDONTWRITEBYTECODE
     value: "1"
   {{- if .Values.subscriptionsConfig.enabled }}

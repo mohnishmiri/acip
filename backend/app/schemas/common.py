@@ -2,11 +2,14 @@
 
 from __future__ import annotations
 
+import re
 from datetime import date
 from decimal import Decimal
 from typing import Any, Literal
 
-from pydantic import BaseModel, ConfigDict, Field, field_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
+
+EMAIL_RE = re.compile(r"^[^@\s<>\"']+@[A-Za-z0-9-]+(\.[A-Za-z0-9-]+)+$")
 
 
 class Envelope(BaseModel):
@@ -184,8 +187,38 @@ class AlertRuleIn(BaseModel):
     filters: dict[str, Any] = Field(default_factory=dict)
     params: dict[str, Any] = Field(default_factory=dict)
     channels: list[Literal["in_app", "teams", "email"]] = Field(default_factory=lambda: ["in_app"])
+    email_recipients: list[str] = Field(default_factory=list, max_length=50, description="Recipients when the email channel is selected")
     cooldown_hours: int = 24
     enabled: bool = True
+
+    @field_validator("email_recipients")
+    @classmethod
+    def valid_emails(cls, v: list[str]) -> list[str]:
+        out = []
+        for e in v:
+            e = e.strip().lower()
+            if not EMAIL_RE.match(e):
+                raise ValueError(f"'{e}' is not a valid email address")
+            out.append(e)
+        return sorted(set(out))
+
+    @model_validator(mode="after")
+    def email_needs_recipients(self) -> AlertRuleIn:
+        if "email" in self.channels and not self.email_recipients:
+            raise ValueError("Add at least one email recipient when the email channel is selected")
+        return self
+
+
+class TestEmailIn(BaseModel):
+    recipients: list[str] = Field(min_length=1, max_length=10)
+
+    @field_validator("recipients")
+    @classmethod
+    def valid_emails(cls, v: list[str]) -> list[str]:
+        for e in v:
+            if not EMAIL_RE.match(e.strip()):
+                raise ValueError(f"'{e}' is not a valid email address")
+        return [e.strip().lower() for e in v]
 
 
 class RoleAssignmentIn(BaseModel):

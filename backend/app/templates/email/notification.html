@@ -1,0 +1,171 @@
+<!DOCTYPE html>
+<html lang="en" xmlns="http://www.w3.org/1999/xhtml" xmlns:v="urn:schemas-microsoft-com:vml" xmlns:o="urn:schemas-microsoft-com:office:office">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="x-apple-disable-message-reformatting">
+<meta name="color-scheme" content="light">
+<meta name="supported-color-schemes" content="light">
+<title>{{ subject }}</title>
+<!--[if mso]><style>table,td,div,p,a,span{font-family:'Segoe UI',Arial,sans-serif !important;}</style><![endif]-->
+<style>
+  body { margin:0; padding:0; background:#f2f4f7; }
+  a { color:#0f6cbd; }
+  @media screen and (max-width:640px) {
+    .container { width:100% !important; }
+    .px { padding-left:20px !important; padding-right:20px !important; }
+    .metric { display:block !important; width:100% !important; box-sizing:border-box !important; border-left:0 !important; border-top:1px solid #e6e9ee !important; }
+    .metric-first { border-top:0 !important; }
+    .hide-sm { display:none !important; }
+  }
+</style>
+</head>
+<body style="margin:0; padding:0; background:#f2f4f7; -webkit-text-size-adjust:100%; -ms-text-size-adjust:100%;">
+<div style="display:none; font-size:1px; color:#f2f4f7; line-height:1px; max-height:0; max-width:0; opacity:0; overflow:hidden;">{{ preheader }}&#8199;&#65279;&#847;&#8199;&#65279;&#847;&#8199;&#65279;&#847;&#8199;&#65279;&#847;&#8199;&#65279;&#847;</div>
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" bgcolor="#f2f4f7" style="background:#f2f4f7;">
+<tr><td align="center" style="padding:28px 12px;">
+
+  <table role="presentation" class="container" width="640" cellpadding="0" cellspacing="0" border="0" style="width:640px; max-width:640px;">
+
+    <!-- Brand bar -->
+    <tr><td style="background:#1b2a3a; border-radius:8px 8px 0 0; padding:16px 28px;" class="px" bgcolor="#1b2a3a">
+      <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0"><tr>
+        <td valign="middle" style="font-family:'Segoe UI',Arial,sans-serif;">
+          <table role="presentation" cellpadding="0" cellspacing="0" border="0"><tr>
+            <td valign="middle" width="30" height="30" bgcolor="#0f6cbd" style="width:30px; height:30px; background:#0f6cbd; border-radius:6px; text-align:center; font-size:13px; font-weight:700; color:#ffffff; font-family:'Segoe UI',Arial,sans-serif;">AC</td>
+            <td valign="middle" style="padding-left:10px; font-family:'Segoe UI',Arial,sans-serif;">
+              <div style="font-size:14px; font-weight:700; color:#ffffff; line-height:1.2;">{{ brand.product }}</div>
+              <div style="font-size:11px; color:#a9b4c2; line-height:1.3;">{{ brand.tagline }}</div>
+            </td>
+          </tr></table>
+        </td>
+        <td align="right" valign="middle" class="hide-sm" style="font-family:'Segoe UI',Arial,sans-serif; font-size:12px; color:#a9b4c2;">{{ kind_label }}</td>
+      </tr></table>
+    </td></tr>
+
+    <!-- Severity accent -->
+    <tr><td height="4" style="height:4px; line-height:4px; font-size:0; background:{{ accent }};" bgcolor="{{ accent }}">&nbsp;</td></tr>
+
+    {% if is_demo %}
+    <tr><td style="background:#f3effc; padding:9px 28px; font-family:'Segoe UI',Arial,sans-serif; font-size:12px; color:#4b2a8a; border-left:1px solid #e1e4e8; border-right:1px solid #e1e4e8;" class="px" bgcolor="#f3effc">
+      <strong>DEMO DATA</strong> &mdash; all figures in this message are synthetic and do not represent actual Azure billing.
+    </td></tr>
+    {% endif %}
+
+    <!-- Body -->
+    <tr><td style="background:#ffffff; border-left:1px solid #e1e4e8; border-right:1px solid #e1e4e8; padding:28px 28px 8px 28px;" class="px" bgcolor="#ffffff">
+
+      <!-- Eyebrow -->
+      <table role="presentation" cellpadding="0" cellspacing="0" border="0"><tr>
+        {% if severity %}
+        <td style="background:{{ severity.bg }}; border:1px solid {{ severity.border }}; border-radius:4px; padding:3px 9px; font-family:'Segoe UI',Arial,sans-serif; font-size:11px; font-weight:700; letter-spacing:0.4px; color:{{ severity.fg }};" bgcolor="{{ severity.bg }}">
+          <span style="color:{{ severity.dot }};">&#9679;</span>&nbsp;{{ severity.label }}
+        </td>
+        <td width="10" style="width:10px;">&nbsp;</td>
+        {% endif %}
+        <td style="font-family:'Segoe UI',Arial,sans-serif; font-size:12px; color:#6b6f76;">{{ eyebrow }}</td>
+      </tr></table>
+
+      <h1 style="margin:14px 0 8px 0; font-family:'Segoe UI',Arial,sans-serif; font-size:21px; line-height:1.3; font-weight:600; color:#1b1f24;">{{ title }}</h1>
+      <p style="margin:0 0 22px 0; font-family:'Segoe UI',Arial,sans-serif; font-size:14px; line-height:1.6; color:#3d4148;">{{ lead }}</p>
+
+      {% if metrics %}
+      <!-- Key figures -->
+      <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="border:1px solid #e6e9ee; border-radius:6px; border-collapse:separate;">
+        <tr>
+        {% for m in metrics %}
+          <td class="metric{% if loop.first %} metric-first{% endif %}" valign="top" width="{{ (100 / metrics|length)|int }}%" style="padding:14px 16px; font-family:'Segoe UI',Arial,sans-serif;{% if not loop.first %} border-left:1px solid #e6e9ee;{% endif %}">
+            <div style="font-size:11px; font-weight:600; letter-spacing:0.5px; text-transform:uppercase; color:#6b6f76;">{{ m.label }}</div>
+            <div style="font-size:20px; font-weight:600; line-height:1.35; color:{{ m.color or '#1b1f24' }}; padding-top:4px;">{{ m.value }}</div>
+            {% if m.sub %}<div style="font-size:12px; color:#6b6f76; padding-top:2px;">{{ m.sub }}</div>{% endif %}
+          </td>
+        {% endfor %}
+        </tr>
+      </table>
+      {% endif %}
+
+      {% if progress %}
+      <!-- Utilisation bar -->
+      <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="margin-top:16px;">
+        <tr><td style="font-family:'Segoe UI',Arial,sans-serif; font-size:12px; color:#3d4148; padding-bottom:6px;">{{ progress.label }}</td></tr>
+        <tr><td>
+          <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="border-radius:4px; overflow:hidden;"><tr>
+            {% if progress.pct > 0 %}<td width="{{ progress.pct }}%" height="10" bgcolor="{{ progress.color }}" style="height:10px; font-size:0; line-height:0; background:{{ progress.color }};">&nbsp;</td>{% endif %}
+            {% if progress.pct < 100 %}<td width="{{ 100 - progress.pct }}%" height="10" bgcolor="#e3eefb" style="height:10px; font-size:0; line-height:0; background:#e3eefb;">&nbsp;</td>{% endif %}
+          </tr></table>
+        </td></tr>
+        {% if progress.note %}<tr><td style="font-family:'Segoe UI',Arial,sans-serif; font-size:12px; color:#6b6f76; padding-top:6px;">{{ progress.note }}</td></tr>{% endif %}
+      </table>
+      {% endif %}
+
+      {% if details %}
+      <!-- Details -->
+      <h2 style="margin:26px 0 10px 0; font-family:'Segoe UI',Arial,sans-serif; font-size:13px; font-weight:700; letter-spacing:0.4px; text-transform:uppercase; color:#52514e;">Details</h2>
+      <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="border-top:1px solid #e6e9ee;">
+        {% for label, value in details %}
+        <tr>
+          <td width="34%" valign="top" style="padding:8px 12px 8px 0; border-bottom:1px solid #eef0f3; font-family:'Segoe UI',Arial,sans-serif; font-size:13px; color:#6b6f76;">{{ label }}</td>
+          <td valign="top" style="padding:8px 0; border-bottom:1px solid #eef0f3; font-family:'Segoe UI',Arial,sans-serif; font-size:13px; color:#1b1f24; word-break:break-word;">{{ value }}</td>
+        </tr>
+        {% endfor %}
+      </table>
+      {% endif %}
+
+      {% for s in sections %}
+      <h2 style="margin:26px 0 10px 0; font-family:'Segoe UI',Arial,sans-serif; font-size:13px; font-weight:700; letter-spacing:0.4px; text-transform:uppercase; color:#52514e;">{{ s.heading }}</h2>
+        {% for p in s.paragraphs or [] %}
+      <p style="margin:0 0 10px 0; font-family:'Segoe UI',Arial,sans-serif; font-size:14px; line-height:1.6; color:#3d4148;">{{ p }}</p>
+        {% endfor %}
+        {% if s.table %}
+      <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="border:1px solid #e6e9ee; border-radius:6px; border-collapse:separate;">
+        <tr>{% for h in s.table.headers %}<td style="padding:8px 10px; background:#f8f9fb; font-family:'Segoe UI',Arial,sans-serif; font-size:11px; font-weight:700; letter-spacing:0.3px; text-transform:uppercase; color:#6b6f76;{% if not loop.first %} text-align:right;{% endif %}" bgcolor="#f8f9fb">{{ h }}</td>{% endfor %}</tr>
+        {% for row in s.table.rows %}
+        <tr>{% for c in row %}<td style="padding:8px 10px; border-top:1px solid #eef0f3; font-family:'Segoe UI',Arial,sans-serif; font-size:13px; color:#1b1f24;{% if not loop.first %} text-align:right; white-space:nowrap;{% endif %}">{{ c }}</td>{% endfor %}</tr>
+        {% endfor %}
+      </table>
+        {% endif %}
+        {% if s.bullets %}
+      <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0">
+          {% for item in s.bullets %}
+        <tr>
+          <td width="26" valign="top" style="padding:3px 0; font-family:'Segoe UI',Arial,sans-serif; font-size:13px; font-weight:700; color:#0f6cbd;">{% if s.ordered %}{{ loop.index }}.{% else %}&#8226;{% endif %}</td>
+          <td valign="top" style="padding:3px 0 6px 0; font-family:'Segoe UI',Arial,sans-serif; font-size:14px; line-height:1.55; color:#3d4148;">{{ item }}</td>
+        </tr>
+          {% endfor %}
+      </table>
+        {% endif %}
+        {% if s.code %}
+      <div style="background:#f8f9fb; border:1px solid #e6e9ee; border-radius:6px; padding:12px 14px; font-family:Consolas,'Courier New',monospace; font-size:12px; line-height:1.5; color:#9b1c1c; word-break:break-word;">{{ s.code }}</div>
+        {% endif %}
+        {% if s.note %}
+      <p style="margin:8px 0 0 0; font-family:'Segoe UI',Arial,sans-serif; font-size:12px; line-height:1.5; color:#6b6f76;"><em>{{ s.note }}</em></p>
+        {% endif %}
+      {% endfor %}
+
+      {% if cta %}
+      <!-- Call to action -->
+      <table role="presentation" cellpadding="0" cellspacing="0" border="0" style="margin:28px 0 8px 0;"><tr>
+        <td bgcolor="#0f6cbd" style="border-radius:5px; background:#0f6cbd;">
+          <a href="{{ cta.url }}" target="_blank" style="display:inline-block; padding:11px 22px; font-family:'Segoe UI',Arial,sans-serif; font-size:14px; font-weight:600; color:#ffffff; text-decoration:none; border-radius:5px;">{{ cta.label }} &rarr;</a>
+        </td>
+        {% if secondary %}
+        <td width="18" style="width:18px;">&nbsp;</td>
+        <td style="font-family:'Segoe UI',Arial,sans-serif; font-size:13px;"><a href="{{ secondary.url }}" target="_blank" style="color:#0f6cbd; font-weight:600; text-decoration:none;">{{ secondary.label }}</a></td>
+        {% endif %}
+      </tr></table>
+      {% endif %}
+      <div style="height:20px; line-height:20px; font-size:0;">&nbsp;</div>
+    </td></tr>
+
+    <!-- Footer -->
+    <tr><td style="background:#f8f9fb; border:1px solid #e1e4e8; border-radius:0 0 8px 8px; padding:18px 28px; font-family:'Segoe UI',Arial,sans-serif; font-size:12px; line-height:1.6; color:#6b6f76;" class="px" bgcolor="#f8f9fb">
+      {% for line in footer_lines %}<div style="margin-bottom:4px;">{{ line }}</div>{% endfor %}
+      <div style="margin-top:8px;"><a href="{{ manage_url }}" target="_blank" style="color:#0f6cbd; text-decoration:none;">Manage alert rules</a> &nbsp;&middot;&nbsp; <a href="{{ brand.public_url }}" target="_blank" style="color:#0f6cbd; text-decoration:none;">Open {{ brand.product }}</a></div>
+      <div style="margin-top:10px; color:#9aa0a6;">Automated message from {{ brand.name }} &mdash; please do not reply. Reference: {{ reference }}</div>
+    </td></tr>
+
+  </table>
+</td></tr>
+</table>
+</body>
+</html>

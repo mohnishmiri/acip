@@ -1,0 +1,29 @@
+{% if is_demo %}*** DEMO DATA - all figures are synthetic and do not represent actual Azure billing ***
+
+{% endif %}{{ brand.product }} | {{ kind_label }}{% if severity %} | {{ severity.label }}{% endif %}
+
+{{ title }}
+{{ '=' * (title|length if title|length < 78 else 78) }}
+
+{{ lead }}
+{% if metrics %}
+{% for m in metrics %}{{ m.label }}: {{ m.value }}{% if m.sub %} ({{ m.sub }}){% endif %}
+{% endfor %}{% endif %}{% if progress %}
+{{ progress.label }}{% if progress.note %} - {{ progress.note }}{% endif %}
+{% endif %}{% if details %}
+DETAILS
+{% for label, value in details %}  {{ label }}: {{ value }}
+{% endfor %}{% endif %}{% for s in sections %}
+{{ s.heading|upper }}
+{% for p in s.paragraphs or [] %}{{ p }}
+{% endfor %}{% if s.table %}{% for row in s.table.rows %}  - {{ row|join(' | ') }}
+{% endfor %}{% endif %}{% if s.bullets %}{% for item in s.bullets %}  {% if s.ordered %}{{ loop.index }}.{% else %}-{% endif %} {{ item }}
+{% endfor %}{% endif %}{% if s.code %}  {{ s.code }}
+{% endif %}{% if s.note %}  Note: {{ s.note }}
+{% endif %}{% endfor %}{% if cta %}
+{{ cta.label }}: {{ cta.url }}
+{% endif %}
+--
+{% for line in footer_lines %}{{ line }}
+{% endfor %}Manage alert rules: {{ manage_url }}
+Automated message from {{ brand.name }} - please do not reply. Reference: {{ reference }}

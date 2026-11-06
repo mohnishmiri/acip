@@ -68,6 +68,20 @@ config:
   DB_POOL_SIZE: "10"
   DB_MAX_OVERFLOW: "10"
   DB_STATEMENT_TIMEOUT_MS: "60000"
+  # Alert emails: disabled | smtp | graph. SMTP_PASSWORD / GRAPH_MAIL_CLIENT_SECRET come from Key Vault
+  # (keyVault.smtpPasswordSecretName / keyVault.graphMailSecretName), never from this file.
+  EMAIL_PROVIDER: disabled
+  EMAIL_FROM_ADDRESS: "acip-alerts@contoso.com"
+  EMAIL_FROM_NAME: "Azure Cost Intelligence"
+  EMAIL_REPLY_TO: ""
+  SMTP_HOST: "smtp.office365.com"
+  SMTP_PORT: "587"
+  SMTP_SECURITY: starttls
+  SMTP_USERNAME: ""
+  GRAPH_MAIL_TENANT_ID: ""
+  GRAPH_MAIL_CLIENT_ID: ""
+  GRAPH_MAIL_SENDER: ""
+  APP_PUBLIC_URL: "https://acip.example.com"
 
 # Optional: subscriptions/applications registered at start-up by the init job
 # (AZURE_SUBSCRIPTIONS_CONFIG). Subscriptions can also be managed in the Administration UI.
@@ -93,6 +107,9 @@ keyVault:
   clientId: ""
   # Key Vault secret name -> key in the synced Kubernetes Secret
   databaseUrlSecretName: acip-database-url
+  # Optional Key Vault secret names for email credentials (leave empty when not used)
+  smtpPasswordSecretName: ""
+  graphMailSecretName: ""
 
 backend:
   replicas: 2

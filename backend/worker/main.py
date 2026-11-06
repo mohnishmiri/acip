@@ -25,6 +25,7 @@ from app.core.db import get_engine, session_factory, use_batch_mode
 from app.core.logging import configure_logging, log_context
 from app.models import AzureSubscription
 from app.services import job_service, notification_service
+from app.services.email.delivery import deliver_pending
 from worker.scheduled_jobs.handlers import HANDLERS
 
 log = logging.getLogger("acip.worker")
@@ -136,6 +137,9 @@ def main() -> None:
         _beat()
         try:
             scheduler.tick()
+            sent = deliver_pending(sf)
+            if any(sent.values()):
+                log.info("Email deliveries processed", extra=sent)
             with sf() as db:
                 job = job_service.claim_next_job(db, worker_id)
                 if job is not None:

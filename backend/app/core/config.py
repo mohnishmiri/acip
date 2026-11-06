@@ -62,6 +62,26 @@ class Settings(BaseSettings):
     export_source: Literal["auto", "azure_blob", "local"] = "auto"
     local_export_root: str = "/data/exports"
 
+    # --- Email notifications ---------------------------------------------------------
+    email_provider: Literal["disabled", "smtp", "graph"] = Field(default="disabled", description="disabled | smtp (any SMTP relay, e.g. Office 365) | graph (Microsoft Graph sendMail)")
+    email_from_address: str = "acip-alerts@example.com"
+    email_from_name: str = "Azure Cost Intelligence"
+    email_reply_to: str | None = None
+    email_max_attempts: int = 5
+    smtp_host: str = "localhost"
+    smtp_port: int = 587
+    smtp_security: Literal["starttls", "ssl", "none"] = "starttls"
+    smtp_username: str | None = None
+    smtp_password: SecretStr | None = None
+    smtp_timeout_seconds: int = 20
+    # Graph: separate app registration with Mail.Send (application) restricted to the sender mailbox;
+    # falls back to the AZURE_* identity only when these are not set.
+    graph_mail_tenant_id: str | None = None
+    graph_mail_client_id: str | None = None
+    graph_mail_client_secret: SecretStr | None = None
+    graph_mail_sender: str | None = Field(default=None, description="Mailbox (UPN) used to send, e.g. acip-alerts@contoso.com")
+    app_public_url: str = Field(default="http://localhost:3000", description="Base URL used for links inside emails")
+
     # --- Worker --------------------------------------------------------------------
     worker_poll_interval_seconds: int = 5
     export_discovery_interval_minutes: int = 60

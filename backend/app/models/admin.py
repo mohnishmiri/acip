@@ -70,6 +70,7 @@ class AlertRule(TimestampMixin, Base):
     filters: Mapped[dict[str, Any]] = mapped_column(JSONB, nullable=False, default=dict)
     params: Mapped[dict[str, Any]] = mapped_column(JSONB, nullable=False, default=dict)
     channels: Mapped[list[Any]] = mapped_column(JSONB, nullable=False, default=lambda: ["in_app"])
+    email_recipients: Mapped[list[Any]] = mapped_column(JSONB, nullable=False, default=list, server_default="[]")
     cooldown_hours: Mapped[int] = mapped_column(Integer, nullable=False, default=24)
     enabled: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
 
@@ -94,6 +95,32 @@ class NotificationHistory(Base):
     read_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     read_by: Mapped[str | None] = mapped_column(String(200))
     is_demo: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+
+
+class NotificationDelivery(Base):
+    """One outbound delivery (e.g. an email) of a notification. Queued by ``notify`` and sent by
+    the worker with retries, so a mail-server problem never blocks detection or the API."""
+
+    __tablename__ = "notification_deliveries"
+    __table_args__ = (
+        UniqueConstraint("notification_id", "channel"),
+        Index("ix_notification_deliveries_queue", "status", "next_attempt_at"),
+    )
+
+    id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
+    notification_id: Mapped[int] = mapped_column(ForeignKey("notification_history.id", ondelete="CASCADE"), nullable=False)
+    channel: Mapped[str] = mapped_column(String(32), nullable=False)  # email
+    recipients: Mapped[list[Any]] = mapped_column(JSONB, nullable=False, default=list)
+    # pending | sent | failed | skipped
+    status: Mapped[str] = mapped_column(String(32), nullable=False, default="pending")
+    attempts: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    next_attempt_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+    provider: Mapped[str | None] = mapped_column(String(32))
+    provider_message_id: Mapped[str | None] = mapped_column(String(300))
+    subject: Mapped[str | None] = mapped_column(String(400))
+    last_error: Mapped[str | None] = mapped_column(Text)
+    sent_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
 
 
