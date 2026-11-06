@@ -4,6 +4,14 @@ FROM python:3.12-slim AS base
 ENV PYTHONDONTWRITEBYTECODE=1 PYTHONUNBUFFERED=1 PIP_NO_CACHE_DIR=1 PIP_DISABLE_PIP_VERSION_CHECK=1
 WORKDIR /app
 RUN apt-get update && apt-get install -y --no-install-recommends postgresql-client curl && rm -rf /var/lib/apt/lists/*
+# Optional TLS-inspecting proxy root CA (public cert); runtime Azure calls traverse the proxy too.
+RUN --mount=type=secret,id=corporate_ca \
+    if [ -s /run/secrets/corporate_ca ]; then \
+      cp /run/secrets/corporate_ca /usr/local/share/ca-certificates/corporate-ca.crt && update-ca-certificates; \
+    fi
+ENV SSL_CERT_FILE=/etc/ssl/certs/ca-certificates.crt \
+    REQUESTS_CA_BUNDLE=/etc/ssl/certs/ca-certificates.crt \
+    PIP_CERT=/etc/ssl/certs/ca-certificates.crt
 COPY requirements.txt requirements-dev.txt ./
 ARG INSTALL_DEV=false
 RUN pip install -r requirements.txt && if [ "$INSTALL_DEV" = "true" ]; then pip install -r requirements-dev.txt; fi

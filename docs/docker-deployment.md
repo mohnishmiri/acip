@@ -54,6 +54,28 @@ docker compose --profile test run --rm tests
 docker compose -f docker-compose.yml -f docker-compose.dev.yml up --build
 ```
 
+## Corporate TLS proxies and npm build failures
+
+If the frontend build reports `Exit handler never called!`, inspect the npm debug
+log printed by the failed build. `UNABLE_TO_GET_ISSUER_CERT_LOCALLY` means Node
+cannot verify the registry's certificate chain. A corporate TLS-inspection proxy
+can cause this even when Windows and Docker image pulls already work.
+
+Export the proxy's root CA (public certificate, PEM) into `certs/` (git-ignored) and
+point `CORPORATE_CA_FILE` at it in `.env`; do not disable npm `strict-ssl` or TLS
+verification. On Windows, find the proxy's root with
+`openssl s_client -proxy <proxy:port> -connect registry.npmjs.org:443 -showcerts`, then:
+
+```bash
+powershell.exe -NoProfile -Command '$c = Get-Item Cert:\LocalMachine\Root\<THUMBPRINT>; $b = [Convert]::ToBase64String($c.RawData, [Base64FormattingOptions]::InsertLineBreaks); "-----BEGIN CERTIFICATE-----`r`n$b`r`n-----END CERTIFICATE-----" | Set-Content -Encoding ascii certs/corporate-ca.pem'
+echo 'CORPORATE_CA_FILE=./certs/corporate-ca.pem' >> .env
+docker compose up --build
+```
+
+Compose passes the file as the `corporate_ca` build secret. It is trusted only during
+`npm ci` and `pip install` and is not copied into the images. Without the setting, an
+empty placeholder (`certs/empty-ca.crt`) is used and builds behave as before.
+
 ## Connecting real Azure data locally
 
 1. `cp .env.example .env` and set:

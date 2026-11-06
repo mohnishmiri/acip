@@ -75,9 +75,11 @@ services:
 
   # one-shot: wait for DB, run migrations, seed reference data, register subscriptions, seed demo data
   init:
-    build:
+    build: &backend-build
       context: ./backend
+      secrets: [corporate_ca]
     image: acip-backend:local
+    pull_policy: build
     command: ["python", "-m", "app.cli", "init"]
     environment: *backend-env
     volumes:
@@ -89,7 +91,9 @@ services:
     restart: "no"
 
   backend:
+    build: *backend-build
     image: acip-backend:local
+    pull_policy: build
     environment: *backend-env
     volumes:
       - ${EXPORTS_HOST_PATH:-exports}:/data/exports
@@ -107,7 +111,9 @@ services:
     restart: unless-stopped
 
   worker:
+    build: *backend-build
     image: acip-backend:local
+    pull_policy: build
     command: ["python", "-m", "worker.main"]
     environment: *backend-env
     volumes:
@@ -126,6 +132,7 @@ services:
   frontend:
     build:
       context: ./frontend
+      secrets: [corporate_ca]
     image: acip-frontend:local
     environment:
       BACKEND_INTERNAL_URL: http://backend:8000
@@ -143,6 +150,7 @@ services:
       context: ./backend
       args:
         INSTALL_DEV: "true"
+      secrets: [corporate_ca]
     image: acip-backend:test
     command: ["pytest", "-q", "--cov=app", "--cov=worker", "--cov-report=term"]
     environment:
@@ -152,6 +160,11 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
+
+# Extra CA trusted only while installing packages (TLS-inspecting corporate proxies).
+secrets:
+  corporate_ca:
+    file: ${CORPORATE_CA_FILE:-./certs/empty-ca.crt}
 
 volumes:
   pgdata:

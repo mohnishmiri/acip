@@ -2,7 +2,11 @@
 FROM node:22-alpine AS deps
 WORKDIR /app
 COPY package.json package-lock.json ./
-RUN npm ci --no-audit --no-fund
+RUN --mount=type=secret,id=corporate_ca \
+		if [ -s /run/secrets/corporate_ca ]; then \
+			export NODE_EXTRA_CA_CERTS=/run/secrets/corporate_ca; \
+		fi; \
+		npm ci --no-audit --no-fund || { cat /root/.npm/_logs/*-debug-0.log; exit 1; }
 
 FROM node:22-alpine AS build
 WORKDIR /app
