@@ -26,6 +26,7 @@ JOB_TYPES = {
     "analytics": "Anomaly detection, savings, budget alerts and forecasts",
     "advisor_import": "Import Azure Advisor cost recommendations",
     "retention": "Drop raw billing partitions older than the retention setting",
+    "local_export": "Pull cost data with the Cost Details API into the local export folder, then ingest it",
 }
 
 

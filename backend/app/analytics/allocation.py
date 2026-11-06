@@ -43,6 +43,11 @@ SERVICE_CATEGORIES = [
     "App Service",
     "Key Vault",
     "Container Registry",
+    "Azure Synapse Analytics",
+    "Azure Databricks",
+    "Azure Data Factory",
+    "Messaging & Integration",
+    "Other Databases",
     DEFAULT_CATEGORY,
 ]
 
@@ -337,7 +342,26 @@ DEFAULT_CATEGORY_RULES: list[tuple[int, str, str, str]] = [
     (91, "resource_type", "microsoft.web/*", "App Service"),
     (95, "meter_category", "key vault", "Key Vault"),
     (96, "meter_category", "container registry", "Container Registry"),
+    # --- added in category rules v2 (seeded once into existing databases) ---
+    (100, "meter_category", "azure synapse analytics", "Azure Synapse Analytics"),
+    (101, "resource_type", "microsoft.synapse/*", "Azure Synapse Analytics"),
+    (105, "meter_category", "azure databricks", "Azure Databricks"),
+    (106, "resource_type", "microsoft.databricks/*", "Azure Databricks"),
+    (110, "meter_category", "azure data factory*", "Azure Data Factory"),
+    (111, "resource_type", "microsoft.datafactory/*", "Azure Data Factory"),
+    (115, "meter_category", "event hubs", "Messaging & Integration"),
+    (116, "meter_category", "service bus", "Messaging & Integration"),
+    (117, "meter_category", "event grid", "Messaging & Integration"),
+    (118, "meter_category", "logic apps", "Messaging & Integration"),
+    (119, "meter_category", "api management", "Messaging & Integration"),
+    (125, "meter_category", "azure database for postgresql", "Other Databases"),
+    (126, "meter_category", "azure database for mysql", "Other Databases"),
+    (127, "meter_category", "azure database for mariadb", "Other Databases"),
+    (128, "meter_category", "azure cosmos db", "Other Databases"),
+    (129, "meter_category", "redis cache", "Other Databases"),
+    (130, "meter_category", "azure cache for redis", "Other Databases"),
 ]
+CATEGORY_RULES_VERSION = 2
 
 DEFAULT_TAG_MAPPINGS: list[tuple[str, str, int]] = [
     # tag key, target dimension, priority

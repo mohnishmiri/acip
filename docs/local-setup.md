@@ -72,3 +72,27 @@ With `APP_AUTH_MODE=disabled`, use the user menu → *Simulate role* in the UI, 
 `X-ACIP-Dev-Role: viewer` (and optionally `X-ACIP-Dev-Application: <id>`) to the API.
 
 More commands: `docs/docker-deployment.md`.
+
+## Troubleshooting
+
+### `password authentication failed for user "acip"` (init keeps waiting / exits)
+
+PostgreSQL stores the user's password only when the `pgdata` volume is **first** created. If
+`POSTGRES_PASSWORD` (or `POSTGRES_USER` / `POSTGRES_DB`) changed afterwards -- typically by
+creating `.env` from `.env.example` after an earlier start -- the services connect with credentials
+the existing database does not accept. `init` detects this and exits with instructions.
+
+Keep the data and align the stored password with the value now in `.env`:
+
+```bash
+docker compose up -d postgres
+docker compose exec -T postgres sh -c 'echo "ALTER USER $POSTGRES_USER WITH PASSWORD :'"'"'pw'"'"';" | psql -U "$POSTGRES_USER" -d postgres -v pw="$POSTGRES_PASSWORD"'
+docker compose up --build
+```
+
+Or start fresh (demo data is regenerated automatically in about a minute):
+
+```bash
+docker compose down -v && docker compose up --build
+```
+

@@ -105,3 +105,11 @@ def test_monthly_series_flags_partial_buckets(client):
     cov = s["coverage"]
     assert len(cov) == len(s["buckets"])
     assert cov[-1][0] < cov[-1][1]  # Nov 2026 has 1 of 30 days in the period
+
+
+def test_application_codes_may_be_upper_case(client):
+    new = client.post("/api/v1/admin/applications", json={"code": "ATTCC-TEST", "name": "Upper case code"})
+    assert new.status_code == 201, new.text
+    aid = new.json()["id"]
+    assert client.put(f"/api/v1/admin/applications/{aid}", json={"code": "ATTCC-TEST", "name": "Renamed"}).status_code == 200
+    assert client.delete(f"/api/v1/admin/applications/{aid}").status_code == 204

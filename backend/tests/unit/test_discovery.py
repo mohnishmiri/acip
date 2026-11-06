@@ -47,3 +47,12 @@ def test_local_source_rejects_path_escape(tmp_path):
     src = LocalExportSource(str(tmp_path / "root"))
     (tmp_path / "root" / "c").mkdir(parents=True)
     assert src.list_files("c", "../../") == []
+
+
+def test_month_chunks_and_default_range():
+    from worker.ingestion.local_export import default_range, month_chunks
+
+    assert month_chunks(date(2026, 9, 15), date(2026, 11, 6)) == [
+        (date(2026, 9, 15), date(2026, 9, 30)), (date(2026, 10, 1), date(2026, 10, 31)), (date(2026, 11, 1), date(2026, 11, 6))]
+    assert default_range(3, today=date(2026, 11, 6)) == (date(2026, 9, 1), date(2026, 11, 6))
+    assert default_range(99, today=date(2026, 11, 6))[0] == date(2025, 11, 1)  # capped at 13 months

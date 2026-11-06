@@ -82,15 +82,20 @@ def test_subscription(db: Session, sub: AzureSubscription) -> dict[str, Any]:
         except ArmError as exc:
             cost_status = "failed"
             steps["cost_api"] = _step("failed", f"{exc.status} {exc.code}: {exc.message}", remediation=REMEDIATION["cost"].format(sid=sub.subscription_id))
+        local_mode = settings.effective_export_source == "local"
         try:
             exports = client.list_exports(sub.subscription_id)
             names = [e.get("name") for e in exports]
             configured = {e.export_name for e in sub.export_definitions}
             missing = sorted(configured - set(names))
-            steps["exports"] = _step("ok" if not missing else "warning",
-                                     f"{len(names)} export(s) found in Cost Management" + (f"; not found: {', '.join(missing)}" if missing else ""), exports=names)
+            if local_mode:
+                steps["exports"] = _step("skipped", f"Local export mode (EXPORT_SOURCE=local): Cost Management exports are not required; data is pulled with the Cost Details API. "
+                                                    f"{len(names)} export(s) currently exist in Cost Management.", exports=names)
+            else:
+                steps["exports"] = _step("ok" if not missing else "warning",
+                                         f"{len(names)} export(s) found in Cost Management" + (f"; not found: {', '.join(missing)}" if missing else ""), exports=names)
         except ArmError as exc:
-            steps["exports"] = _step("warning", f"Could not list exports: {exc.status} {exc.code}: {exc.message}")
+            steps["exports"] = _step("skipped" if local_mode else "warning", f"Could not list exports: {exc.status} {exc.code}: {exc.message}")
     else:
         for k in ("subscription", "cost_api", "exports"):
             steps[k] = _step("skipped", "Skipped because authentication failed.")

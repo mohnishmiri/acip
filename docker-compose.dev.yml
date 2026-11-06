@@ -4,16 +4,16 @@ services:
   init:
     volumes:
       - ./backend:/app
-      - exports:/data/exports
+      - ${EXPORTS_HOST_PATH:-exports}:/data/exports
       - ./config:/config:ro
   backend:
     command: ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000", "--reload"]
     volumes:
       - ./backend:/app
-      - exports:/data/exports
+      - ${EXPORTS_HOST_PATH:-exports}:/data/exports
       - ./config:/config:ro
   worker:
     volumes:
       - ./backend:/app
-      - exports:/data/exports
+      - ${EXPORTS_HOST_PATH:-exports}:/data/exports
       - ./config:/config:ro

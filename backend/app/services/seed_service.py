@@ -5,8 +5,8 @@ from __future__ import annotations
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.analytics.allocation import DEFAULT_CATEGORY_RULES, DEFAULT_TAG_MAPPINGS
-from app.models import AlertRule, AnomalyRule, Environment, ResourceTagMapping, Role, ServiceCategoryRule
+from app.analytics.allocation import CATEGORY_RULES_VERSION, DEFAULT_CATEGORY_RULES, DEFAULT_TAG_MAPPINGS
+from app.models import AlertRule, AnomalyRule, ApplicationSetting, Environment, ResourceTagMapping, Role, ServiceCategoryRule
 
 ENVIRONMENTS = [
     # code, name, group, is_production, sort
@@ -111,6 +111,33 @@ ALERT_RULES = [
 ]
 
 
+CATEGORY_RULES_VERSION_KEY = "seed.category_rules_version"
+V1_CATEGORY_PRIORITIES = 99  # rules with priority <= 99 shipped in v1
+
+
+def _seed_category_rules(db: Session) -> int:
+    """Install default category rules; on upgrade add only rules introduced after the stored
+    version (rules an administrator deleted earlier are not re-created)."""
+    row = db.get(ApplicationSetting, CATEGORY_RULES_VERSION_KEY)
+    existing = {(r.match_field, r.pattern.lower()) for r in db.execute(select(ServiceCategoryRule)).scalars()}
+    if not existing:
+        candidates = DEFAULT_CATEGORY_RULES
+    elif row is None or int(row.value) < CATEGORY_RULES_VERSION:
+        candidates = [r for r in DEFAULT_CATEGORY_RULES if r[0] > V1_CATEGORY_PRIORITIES]  # v2 additions
+    else:
+        candidates = []
+    added = 0
+    for prio, field, pattern, category in candidates:
+        if (field, pattern.lower()) not in existing:
+            db.add(ServiceCategoryRule(match_field=field, pattern=pattern, category=category, priority=prio, description="Default rule"))
+            added += 1
+    if row is None:
+        db.add(ApplicationSetting(key=CATEGORY_RULES_VERSION_KEY, value=CATEGORY_RULES_VERSION, description="Internal: default category rule set version", updated_by="seed"))
+    elif int(row.value) < CATEGORY_RULES_VERSION:
+        row.value = CATEGORY_RULES_VERSION
+    return added
+
+
 def seed_reference_data(db: Session) -> dict[str, int]:
     counts = {"environments": 0, "roles": 0, "category_rules": 0, "tag_mappings": 0, "anomaly_rules": 0, "alert_rules": 0}
     existing_envs = {e.code for e in db.execute(select(Environment)).scalars()}
@@ -123,10 +150,7 @@ def seed_reference_data(db: Session) -> dict[str, int]:
         if code not in existing_roles:
             db.add(Role(code=code, name=name, description=desc, entra_app_role=app_role))
             counts["roles"] += 1
-    if not db.execute(select(ServiceCategoryRule).limit(1)).first():
-        for prio, field, pattern, category in DEFAULT_CATEGORY_RULES:
-            db.add(ServiceCategoryRule(match_field=field, pattern=pattern, category=category, priority=prio, description="Default rule"))
-            counts["category_rules"] += 1
+    counts["category_rules"] = _seed_category_rules(db)
     if not db.execute(select(ResourceTagMapping).limit(1)).first():
         for key, dim, prio in DEFAULT_TAG_MAPPINGS:
             db.add(ResourceTagMapping(tag_key=key, target_dimension=dim, priority=prio, description="Default mapping"))

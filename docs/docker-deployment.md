@@ -73,8 +73,11 @@ variables at runtime and are never baked into images.
 ## File-drop exports (no Azure access)
 
 With `EXPORT_SOURCE=local`, export definitions read
-`$LOCAL_EXPORT_ROOT/<container>/<root_folder_path>/<export_name>/…` from the `exports` volume
-(same v2 layout as Blob Storage), which is useful for testing downloaded export files.
+`$LOCAL_EXPORT_ROOT/<container>/<root_folder_path>/<export_name>/…` (same v2 layout as Blob
+Storage) from the `exports` volume, or from a host folder when `EXPORTS_HOST_PATH=./data/exports`.
+With Azure integration enabled, fill that folder without a storage account using
+`python -m app.cli export-local` / Data Management → *Pull to local exports* -- see
+[azure-integration.md](azure-integration.md#local-export-mode-no-storage-account-yet).
 
 ## Images
 

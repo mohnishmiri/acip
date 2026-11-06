@@ -122,7 +122,11 @@ class ArmClient:
 
     def generate_cost_details(self, subscription_id: str, metric: str, start: date, end: date, poll_seconds: int = 20, max_wait_seconds: int = 1800) -> list[str]:
         """Cost Details API: asynchronous report generation (max one month per request).
-        Returns blob URLs (time-limited SAS) of the generated CSV files."""
+
+        Returns the blob URLs (time-limited SAS links on Microsoft-managed storage) of the
+        generated CSV files, or an empty list when Azure reports no data for the range.
+        No customer storage account is involved.
+        """
         body = {"metric": metric, "timePeriod": {"start": start.isoformat(), "end": end.isoformat()}}
         resp = self.request(
             "POST",
@@ -131,28 +135,48 @@ class ArmClient:
             json=body,
         )
         self.raise_for(resp)
-        location = resp.headers.get("Location") or resp.headers.get("location")
-        if resp.status_code == 200:
+        if resp.status_code == 204:
+            return []
+        payload: dict[str, Any] = {}
+        if resp.status_code == 200 and resp.content:
             payload = resp.json()
         else:
+            location = resp.headers.get("Location") or resp.headers.get("location")
             if not location:
                 raise ArmError(resp.status_code, "NoLocation", "Cost Details API did not return an operation location")
             waited = 0
+            wait = self._retry_after(resp, poll_seconds)
             while True:
-                time.sleep(poll_seconds)
-                waited += poll_seconds
+                time.sleep(wait)
+                waited += wait
                 poll = self.request("GET", location)
                 self.raise_for(poll)
-                if poll.status_code == 200:
+                if poll.status_code == 204:
+                    return []
+                if poll.status_code == 200 and poll.content:
                     payload = poll.json()
-                    break
+                    status = str(payload.get("status", "")).lower()
+                    if status in ("completed", "succeeded", "nodatafound", "failed", "canceled", "cancelled", "timedout", ""):
+                        break
                 if waited > max_wait_seconds:
                     raise ArmError(408, "Timeout", "Cost Details report generation timed out")
-        status = payload.get("status")
-        if status and status.lower() not in ("completed", "succeeded"):
-            raise ArmError(500, status, f"Cost Details report finished with status {status}")
-        blobs = payload.get("manifest", {}).get("blobs", [])
+                wait = self._retry_after(poll, poll_seconds)
+        status = str(payload.get("status", "completed")).lower()
+        if status == "nodatafound":
+            return []
+        if status not in ("completed", "succeeded"):
+            err = payload.get("error") or {}
+            raise ArmError(500, payload.get("status", "Failed"), err.get("message") or f"Cost Details report finished with status {payload.get('status')}")
+        blobs = (payload.get("manifest") or {}).get("blobs", [])
         return [b["blobLink"] for b in blobs if b.get("blobLink")]
+
+    @staticmethod
+    def _retry_after(resp: httpx.Response, default: int) -> int:
+        v = resp.headers.get("Retry-After") or resp.headers.get("retry-after")
+        try:
+            return max(5, min(int(v), 120)) if v else default
+        except ValueError:
+            return default
 
     def list_advisor_cost_recommendations(self, subscription_id: str) -> list[dict[str, Any]]:
         resp = self.request(

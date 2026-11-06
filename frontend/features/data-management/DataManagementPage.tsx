@@ -1,4 +1,5 @@
 "use client";
+import DownloadForOfflineOutlinedIcon from "@mui/icons-material/DownloadForOfflineOutlined";
 import CloseIcon from "@mui/icons-material/Close";
 import CloudSyncOutlinedIcon from "@mui/icons-material/CloudSyncOutlined";
 import HistoryIcon from "@mui/icons-material/History";
@@ -22,6 +23,7 @@ import type { Freshness } from "@/lib/types";
 import { useApi } from "@/services/queries";
 import DataTable from "@/tables/DataTable";
 import { surface } from "@/styles/tokens";
+import { useAuth } from "@/components/layout/AuthProvider";
 import { ConfirmDialog, errorMessage, FormDialog, KeyValueList, RhfSelect, RhfText, ToastProvider, useCan, useToast } from "@/features/admin/ui";
 
 interface Job {
@@ -102,6 +104,8 @@ const JOB_LABEL: Record<string, string> = {
   reattribute: "Re-apply allocation rules",
   analytics: "Analytics refresh",
   advisor_import: "Azure Advisor import",
+  local_export: "Pull to local exports",
+  retention: "Retention",
 };
 
 const reprocessSchema = z
@@ -124,6 +128,13 @@ const backfillSchema = z
   .refine((v) => v.end_date >= v.start_date, { path: ["end_date"], message: "End must be on or after start" })
   .refine((v) => (new Date(v.end_date).getTime() - new Date(v.start_date).getTime()) / 86400000 <= 31, { path: ["end_date"], message: "The Cost Details API accepts at most one month per request" });
 type BackfillValues = z.infer<typeof backfillSchema>;
+
+const localSchema = z.object({
+  months: z.number({ error: "Enter a number" }).int().min(1, "At least 1 month").max(13, "At most 13 months"),
+  dataset_types: z.array(z.enum(["actual", "amortized"])).min(1, "Select at least one cost type"),
+  subscription_ids: z.array(z.string()),
+});
+type LocalValues = z.infer<typeof localSchema>;
 
 function Pager<T>({ path, columns, storageKey, testId, defaultHidden, renderSubRow, emptyMessage }: { path: string; columns: ColumnDef<T, unknown>[]; storageKey: string; testId: string; defaultHidden?: string[]; renderSubRow?: (r: T) => React.ReactNode; emptyMessage?: string }) {
   const [paging, setPaging] = useState({ page: 1, size: 50 });
@@ -159,6 +170,9 @@ function DataInner() {
   const [confirmSync, setConfirmSync] = useState<{ subscription?: SubFresh } | null>(null);
   const [reprocessOpen, setReprocessOpen] = useState<string | null>(null);
   const [backfillOpen, setBackfillOpen] = useState(false);
+  const [localOpen, setLocalOpen] = useState(false);
+  const { config } = useAuth();
+  const localMode = !!config?.azure_integration && config?.export_source === "local";
   const [jobId, setJobId] = useState<number | null>(null);
   const [busy, setBusy] = useState(false);
   const detail = useApi<JobDetail>(jobId ? `/ingestion/jobs/${jobId}` : null, undefined, { refetchInterval: active ? 4000 : false });
@@ -186,6 +200,7 @@ function DataInner() {
   }, [reprocessOpen]); // eslint-disable-line react-hooks/exhaustive-deps
   const backfillForm = useForm<BackfillValues>({ resolver: zodResolver(backfillSchema), defaultValues: { subscription_id: "", metric: "ActualCost", start_date: "", end_date: "" } });
   const [formError, setFormError] = useState<string | null>(null);
+  const localForm = useForm<LocalValues>({ resolver: zodResolver(localSchema), defaultValues: { months: 3, dataset_types: ["actual", "amortized"], subscription_ids: [] } });
 
   const subOptions = subs.map((x) => ({ value: x.subscription_id, label: `${x.subscription_name}${x.is_demo ? " (demo)" : ""}` }));
 
@@ -350,6 +365,12 @@ function DataInner() {
               >
                 Re-run analytics
               </Button>
+              {localMode && (
+                <Button variant="outlined" color="primary" startIcon={<DownloadForOfflineOutlinedIcon fontSize="small" />} data-testid="local-export-open"
+                  onClick={() => { setFormError(null); localForm.reset({ months: 3, dataset_types: ["actual", "amortized"], subscription_ids: [] }); setLocalOpen(true); }}>
+                  Pull to local exports
+                </Button>
+              )}
               <Button variant="outlined" color="inherit" startIcon={<HistoryIcon fontSize="small" />} onClick={() => { setFormError(null); backfillForm.reset({ subscription_id: "", metric: "ActualCost", start_date: "", end_date: "" }); setBackfillOpen(true); }} data-testid="backfill-open">
                 Backfill (Cost Details API)
               </Button>
@@ -504,6 +525,39 @@ function DataInner() {
             <RhfText control={backfillForm.control} name="end_date" label="End" type="date" />
           </Grid>
         </Grid>
+      </FormDialog>
+
+      <FormDialog
+        open={localOpen}
+        title="Pull cost data to local exports"
+        onClose={() => setLocalOpen(false)}
+        busy={localForm.formState.isSubmitting}
+        error={formError}
+        submitLabel="Queue pull"
+        testId="local-export-dialog"
+        onSubmit={localForm.handleSubmit(async (v) => {
+          setFormError(null);
+          try {
+            const r = await api<{ jobs: { job_id: number; created: boolean }[]; range: [string, string]; months: number }>("/ingestion/local-export", {
+              method: "POST",
+              body: { months: v.months, dataset_types: v.dataset_types, subscription_ids: v.subscription_ids.length ? v.subscription_ids : null },
+            });
+            toast(`${r.jobs.length} job(s) queued for ${r.range[0]} → ${r.range[1]} (${r.months} month(s))`);
+            setLocalOpen(false);
+            refreshAll();
+          } catch (e) {
+            setFormError(errorMessage(e));
+          }
+        })}
+      >
+        <Alert severity="info">
+          Local export mode (<code>EXPORT_SOURCE=local</code>): no storage account is needed. For each subscription, month and cost type the Cost Details API generates a CSV report; it is saved in the
+          local export folder in the same layout an Azure export would use, then ingested. Re-pulling a month replaces it. Read-only — nothing is created in your subscriptions. Jobs run one at a time and
+          each report can take a minute or more.
+        </Alert>
+        <RhfText control={localForm.control} name="months" label="Calendar months (ending with the current month)" type="number" testId="local-export-months" />
+        <RhfSelect control={localForm.control} name="dataset_types" label="Cost types" multiple options={[{ value: "actual", label: "Actual cost" }, { value: "amortized", label: "Amortized cost" }]} />
+        <RhfSelect control={localForm.control} name="subscription_ids" label="Subscriptions (empty = all enabled)" multiple options={subOptions.filter((o) => !subs.find((x) => x.subscription_id === o.value)?.is_demo)} />
       </FormDialog>
 
       <Drawer anchor="right" open={jobId !== null} onClose={() => setJobId(null)} slotProps={{ paper: { sx: { width: { xs: "100%", md: 640 } } } }}>

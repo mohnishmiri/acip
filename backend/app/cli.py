@@ -27,6 +27,22 @@ from app.core.logging import configure_logging
 log = logging.getLogger("acip.cli")
 
 
+CREDENTIALS_HELP = r"""
+Database login failed: {error}
+
+PostgreSQL stores the user's password only when its data volume is FIRST created. If
+POSTGRES_USER / POSTGRES_PASSWORD / POSTGRES_DB (in .env or your shell) changed after that,
+the containers now connect with credentials the existing database does not accept.
+
+Fix one of these ways:
+  * keep the data -- set the stored password to the value now in .env:
+        docker compose up -d postgres
+        docker compose exec -T postgres sh -c 'echo "ALTER USER $POSTGRES_USER WITH PASSWORD :'"'"'pw'"'"';" | psql -U "$POSTGRES_USER" -d postgres -v pw="$POSTGRES_PASSWORD"'
+  * start fresh (local demo data is regenerated automatically):
+        docker compose down -v && docker compose up --build
+"""
+
+
 def wait_for_db(timeout: int = 90) -> None:
     deadline = time.time() + timeout
     while True:
@@ -35,6 +51,10 @@ def wait_for_db(timeout: int = 90) -> None:
                 c.execute(text("SELECT 1"))
             return
         except Exception as exc:  # noqa: BLE001
+            msg = str(exc)
+            # Wrong credentials never fix themselves -- fail fast with an explanation instead of retrying.
+            if "password authentication failed" in msg or ("does not exist" in msg and ("role" in msg or "database" in msg)):
+                raise SystemExit(CREDENTIALS_HELP.format(error=msg.strip().splitlines()[0])) from exc
             if time.time() > deadline:
                 raise SystemExit(f"Database not reachable: {exc}") from exc
             log.info("Waiting for database…")
@@ -62,18 +82,66 @@ def init() -> dict:
         out["reference"] = seed_reference_data(db)
         out["config"] = load_config_file(db)
         demo = demo_present(db)
+        if get_settings().effective_export_source == "local":
+            from worker.ingestion.local_export import ensure_local_containers
+
+            out["local_export_folders_created"] = ensure_local_containers(db)
     if get_settings().demo_mode and not demo:
         log.info("Seeding DEMO DATA (first start)…")
         out["demo"] = seed_demo()
     return out
 
 
+def export_local(args) -> dict:
+    """Pull cost data with the Cost Details API into the local export folder, then ingest it."""
+    from sqlalchemy import select
+
+    from app.core.db import session_factory
+    from app.models import AzureSubscription
+    from app.services.analytics_runner import run_analytics
+    from worker.ingestion.local_export import default_range, pull_subscription
+    from worker.ingestion.pipeline import IngestionFailure, sync_subscription
+
+    s = get_settings()
+    if not s.azure_enabled:
+        raise SystemExit("AZURE_AUTH_MODE is disabled; set it (e.g. client_secret) to call the Cost Details API.")
+    if s.effective_export_source != "local":
+        raise SystemExit("Set EXPORT_SOURCE=local to use local export mode.")
+    start, end = default_range(args.months)
+    datasets = [d.strip() for d in args.datasets.split(",") if d.strip()]
+    sf = session_factory()
+    with sf() as db:
+        subs = [x for x in db.execute(select(AzureSubscription).where(AzureSubscription.enabled.is_(True), AzureSubscription.is_demo.is_(False)).order_by(AzureSubscription.id)).scalars()
+                if not args.subscription or x.subscription_id in {g.lower() for g in args.subscription}]
+    results = []
+    for sub in subs:  # one subscription at a time; a failure never stops the others
+        print(f"[{sub.subscription_name}] pulling {start} .. {end} ({', '.join(datasets)})", flush=True)
+        try:
+            r = pull_subscription(sf, sub.id, start, end, datasets)
+            if not args.no_ingest:
+                ing = sync_subscription(sf, sub.id, dataset_types=datasets)
+                r["ingested_runs"], r["rows_loaded"] = ing["runs_applied"], ing["rows_loaded"]
+            print(f"[{sub.subscription_name}] {r['files']} file(s), {r['rows']} row(s)", flush=True)
+            results.append(r)
+        except (IngestionFailure, Exception) as exc:  # noqa: BLE001
+            print(f"[{sub.subscription_name}] FAILED: {exc}", flush=True)
+            results.append({"subscription": sub.subscription_name, "error": str(exc)})
+    if not args.no_ingest:
+        with session_scope() as db:
+            run_analytics(db)
+    return {"range": [start.isoformat(), end.isoformat()], "results": results}
+
+
 def main(argv: list[str] | None = None) -> int:
     s = get_settings()
     configure_logging(s.log_level, "text")
     p = argparse.ArgumentParser(prog="acip")
-    p.add_argument("command", choices=["init", "migrate", "seed-demo", "reset-demo", "analytics", "retention", "test-connections", "dump-schema"])
+    p.add_argument("command", choices=["init", "migrate", "seed-demo", "reset-demo", "analytics", "retention", "test-connections", "export-local", "dump-schema"])
     p.add_argument("--lookback-days", type=int, default=None)
+    p.add_argument("--months", type=int, default=3, help="export-local: calendar months ending with the current month (1-13)")
+    p.add_argument("--subscription", action="append", default=[], help="export-local: subscription GUID (repeatable; default all enabled)")
+    p.add_argument("--datasets", default="actual,amortized", help="export-local: comma-separated datasets")
+    p.add_argument("--no-ingest", action="store_true", help="export-local: only write files, do not ingest")
     args = p.parse_args(argv)
     if args.command == "init":
         result = init()
@@ -105,6 +173,8 @@ def main(argv: list[str] | None = None) -> int:
 
         with session_scope() as db:
             result = apply_retention(db)
+    elif args.command == "export-local":
+        result = export_local(args)
     elif args.command == "test-connections":
         from app.services.connection_service import test_all
 

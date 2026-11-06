@@ -79,9 +79,9 @@ class LocalExportSource:
     def check_access(self, container: str, prefix: str) -> tuple[bool, str]:
         base = self._base(container)
         if not base.exists():
-            return False, f"Local export directory {base} does not exist"
+            return True, f"Local export folder {base} has no files yet (pull data with 'Pull to local exports')"
         n = len(self.list_files(container, prefix))
-        return True, f"Local export directory readable ({n} file(s) under '{prefix}')"
+        return True, f"Local export folder readable ({n} file(s) under '{prefix}')"
 
 
 class AzureBlobExportSource:

@@ -62,7 +62,7 @@ class SubscriptionPatch(BaseModel):
 
 
 class ApplicationIn(BaseModel):
-    code: str = Field(pattern=r"^[a-z0-9][a-z0-9_-]{0,63}$")
+    code: str = Field(pattern=r"^[A-Za-z0-9][A-Za-z0-9_-]{0,63}$")  # e.g. "app1" or "ATTCC"
     name: str = Field(min_length=1, max_length=200)
     description: str | None = None
     owner: str | None = None
@@ -113,6 +113,14 @@ class ReprocessRequest(BaseModel):
     period_from: date
     period_to: date
     dataset_types: list[Literal["actual", "amortized", "focus"]] | None = None
+
+
+class LocalExportRequest(BaseModel):
+    subscription_ids: list[str] | None = Field(default=None, description="Subscriptions to pull (default: all enabled, non-demo)")
+    months: int = Field(default=3, ge=1, le=13, description="Calendar months to pull, ending with the current month (ignored when start_date is given)")
+    start_date: date | None = None
+    end_date: date | None = None
+    dataset_types: list[Literal["actual", "amortized"]] = Field(default_factory=lambda: ["actual", "amortized"])
 
 
 class BackfillRequest(BaseModel):

@@ -60,6 +60,21 @@ def handle_advisor(sf: sessionmaker[Session], job: IngestionJob) -> dict[str, An
     return out
 
 
+def handle_local_export(sf: sessionmaker[Session], job: IngestionJob) -> dict[str, Any]:
+    """Local export mode: Cost Details API -> local export folder -> normal ingestion."""
+    from worker.ingestion.local_export import pull_subscription
+
+    p = job.params
+    datasets = p.get("dataset_types") or ["actual", "amortized"]
+    exported = pull_subscription(sf, job.subscription_fk, _d(p["start_date"]), _d(p["end_date"]), datasets, job_id=job.id)
+    ingested = sync_subscription(sf, job.subscription_fk, job_id=job.id, dataset_types=datasets)
+    if ingested["runs_applied"]:
+        with sf() as db:
+            job_service.enqueue_job(db, "analytics", params={}, priority=70, triggered_by=f"job:{job.id}", parent_job_id=job.id)
+            db.commit()
+    return {"export": exported, "ingestion": {k: ingested[k] for k in ("runs_seen", "runs_applied", "runs_failed", "rows_loaded")}}
+
+
 def handle_retention(sf: sessionmaker[Session], job: IngestionJob) -> dict[str, Any]:
     from worker.aggregation.retention import apply_retention
 
@@ -77,4 +92,5 @@ HANDLERS: dict[str, Callable[[sessionmaker[Session], IngestionJob], dict[str, An
     "analytics": handle_analytics,
     "advisor_import": handle_advisor,
     "retention": handle_retention,
+    "local_export": handle_local_export,
 }

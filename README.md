@@ -6,7 +6,7 @@ subscription, Azure service, resource group, resource and billing meter caused a
 with interactive charts, exact tables, reconciled waterfalls, anomaly detection, budgets,
 forecasts and evidence-based savings.
 
-> Runs locally with **`docker compose up --build`** and ships with clearly-labelled **DEMO DATA**,
+> Runs locally with **`docker compose down -v && docker compose up --build`** and ships with clearly-labelled **DEMO DATA**,
 > so no Azure credentials are needed to evaluate it. Production deployment targets AKS
 > (Helm chart + Bicep included).
 
@@ -140,7 +140,8 @@ settings in Administration → Settings.
 | `AZURE_TENANT_ID`, `AZURE_CLIENT_ID`, `AZURE_CLIENT_SECRET` | — | Existing collection service principal (secret only for local `client_secret` mode) |
 | `AZURE_SUBSCRIPTIONS_CONFIG` | — | Path (e.g. `/config/subscriptions.json`) or inline JSON of applications/subscriptions to register |
 | `AZURE_STORAGE_ACCOUNT_URL`, `AZURE_COST_EXPORT_CONTAINER` | —, `cost-exports` | Export storage |
-| `EXPORT_SOURCE`, `LOCAL_EXPORT_ROOT` | `auto`, `/data/exports` | `azure_blob` / `local` export source |
+| `EXPORT_SOURCE`, `LOCAL_EXPORT_ROOT` | `auto`, `/data/exports` | `azure_blob` / `local` export source. `local` + Azure integration supports *Pull to local exports* (Cost Details API, no storage account) |
+| `EXPORTS_HOST_PATH` | `exports` (Docker volume) | Set to a host path such as `./data/exports` to see the local export CSV files on your machine |
 | `EXPORT_DISCOVERY_INTERVAL_MINUTES`, `ANALYTICS_INTERVAL_MINUTES` | `60`, `360` | Worker schedule |
 | `WORKER_POLL_INTERVAL_SECONDS`, `JOB_MAX_ATTEMPTS`, `JOB_RETRY_BACKOFF_SECONDS`, `JOB_STALE_AFTER_MINUTES` | `5`, `3`, `60`, `60` | Job queue |
 | `INGESTION_REJECT_THRESHOLD_PCT` | `1.0` | Max % rejected rows before a run fails |

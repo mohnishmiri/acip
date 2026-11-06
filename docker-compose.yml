@@ -56,7 +56,7 @@ services:
     command: ["python", "-m", "app.cli", "init"]
     environment: *backend-env
     volumes:
-      - exports:/data/exports
+      - ${EXPORTS_HOST_PATH:-exports}:/data/exports
       - ./config:/config:ro
     depends_on:
       postgres:
@@ -67,7 +67,7 @@ services:
     image: acip-backend:local
     environment: *backend-env
     volumes:
-      - exports:/data/exports
+      - ${EXPORTS_HOST_PATH:-exports}:/data/exports
       - ./config:/config:ro
     ports:
       - "${BACKEND_HOST_PORT:-8000}:8000"
@@ -86,7 +86,7 @@ services:
     command: ["python", "-m", "worker.main"]
     environment: *backend-env
     volumes:
-      - exports:/data/exports
+      - ${EXPORTS_HOST_PATH:-exports}:/data/exports
       - ./config:/config:ro
     depends_on:
       init:

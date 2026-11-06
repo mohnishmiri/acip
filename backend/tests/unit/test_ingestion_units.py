@@ -108,3 +108,11 @@ def test_missing_subscriptions_config_file_is_not_fatal(monkeypatch):
         assert load_config_file(None)["skipped"] == 1  # db never touched
     finally:
         get_settings.cache_clear()
+
+
+def test_common_data_and_messaging_services_have_categories():
+    e = _engine()
+    assert e.categorize({"meter_category": "Azure Synapse Analytics"}) == "Azure Synapse Analytics"
+    assert e.categorize({"meter_category": "Event Hubs"}) == "Messaging & Integration"
+    assert e.categorize({"meter_category": "Azure Database for PostgreSQL"}) == "Other Databases"
+    assert e.categorize({"meter_category": "Backup"}) == "Other Services"

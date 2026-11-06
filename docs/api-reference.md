@@ -132,6 +132,7 @@ curl -s "http://localhost:8000/api/v1/costs/compare?preset=week_to_date&group_by
 | `POST /ingestion/reprocess` | `{subscription_id, period_from, period_to, dataset_types?}` (forced re-ingestion). |
 | `POST /ingestion/backfill` | `{subscription_id, metric, start_date, end_date}` via the Cost Details API (≤ 1 month). |
 | `POST /ingestion/analytics?lookback_days=3` | Re-run analytics. |
+| `POST /ingestion/local-export` | `{subscription_ids?, months?=3, start_date?, end_date?, dataset_types?}` — local export mode: Cost Details API → local export folder (Azure layout) → ingestion; one job per subscription. Requires `EXPORT_SOURCE=local` and Azure integration. |
 | `POST /ingestion/advisor` | Import Azure Advisor cost recommendations (job; requires Azure integration). |
 | `GET /ingestion/runs`, `/files`, `/errors`, `/audit` | Export run registry, source files (hashes, row counts, schema), data-quality errors, audit log. |
 

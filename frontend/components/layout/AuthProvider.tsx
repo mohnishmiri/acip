@@ -14,6 +14,8 @@ interface ClientConfig {
   entra: { tenant_id: string; client_id: string; authority: string; api_scope: string } | null;
   demo_mode: boolean;
   version: string;
+  azure_integration?: boolean;
+  export_source?: "local" | "azure_blob";
 }
 
 interface AuthState {

@@ -89,6 +89,48 @@ Results are stored on `azure_subscriptions` (`auth_status`, `cost_api_status`, `
 remediation hints). A failure in one subscription never stops the others.
 `GET /api/v1/azure/subscriptions/discover` lists subscriptions visible to the service principal.
 
+## Local export mode (no storage account yet)
+
+Use this to evaluate real billing data before a storage account and Cost Management exports
+exist. Requirements: Azure integration enabled (`AZURE_AUTH_MODE=client_secret` locally) and
+**Cost Management Reader** on the subscriptions -- no storage permissions.
+
+```bash
+# .env
+EXPORT_SOURCE=local
+EXPORTS_HOST_PATH=./data/exports      # optional: keep the CSV files on your machine (git-ignored)
+```
+
+Then either **Data Management → Pull to local exports** (choose months / cost types /
+subscriptions), `POST /api/v1/ingestion/local-export`, or from a terminal:
+
+```bash
+docker compose exec backend python -m app.cli export-local --months 3                 # all enabled subscriptions
+docker compose exec backend python -m app.cli export-local --months 1 \
+    --subscription <subscription-id> --datasets actual                                  # one subscription, actual only
+```
+
+For every subscription × calendar month × cost type, the worker calls
+`generateCostDetailsReport`, downloads the CSV (Microsoft-managed SAS links) and writes it,
+with a `manifest.json`, in exactly the layout an Azure export writes to blob storage:
+
+```
+data/exports/cost-exports/subscriptions/<subscription-id>/<actual|amortized>/acip-<dataset>-daily/
+    <YYYYMMDD-YYYYMMDD>/<runId>/part_0_0001.csv + manifest.json
+```
+
+The files are then ingested by the normal pipeline (row-count completeness check, replace
+semantics). Re-pulling a month creates a newer run that **replaces** that month; months for which
+Azure reports no data are skipped. Up to 13 months per request; jobs run one at a time (each
+report typically takes 30-60 s) and are read-only. The connection test reports Cost Management
+exports as "skipped" in this mode because they are not used.
+
+**Moving to the storage account later:** create the Cost Management exports (see
+`infrastructure/scripts/create-cost-exports.sh`) using the same container / folder / export
+names, grant *Storage Blob Data Reader*, then set `EXPORT_SOURCE=azure_blob` and
+`AZURE_STORAGE_ACCOUNT_URL`. Export runs from blob storage are newer and replace the locally
+pulled months; no data has to be deleted.
+
 ## Cost Details API backfill
 
 `POST /api/v1/ingestion/backfill` (`{subscription_id, metric: ActualCost|AmortizedCost, start_date, end_date}`,

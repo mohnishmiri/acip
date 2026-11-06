@@ -10,7 +10,7 @@ from app.analytics.comparison import money
 from app.core.db import get_db
 from app.core.errors import NotFoundError, ValidationFailed
 from app.models import AzureSubscription, ExportRun, IngestionAuditLog, IngestionError, IngestionFile, IngestionJob
-from app.schemas.common import BackfillRequest, Envelope, IngestionTrigger, ReprocessRequest
+from app.schemas.common import BackfillRequest, Envelope, IngestionTrigger, LocalExportRequest, ReprocessRequest
 from app.security.auth import CurrentUser, require
 from app.services import audit_service, freshness_service, job_service
 from app.services.labels import LabelResolver
@@ -138,6 +138,42 @@ def backfill(body: BackfillRequest, request: Request, db: Session = Depends(get_
     audit_service.record(db, user, "ingestion.backfill", entity_type="subscription", entity_id=s.subscription_id, details=params, request=request)
     db.commit()
     return {"job_id": job.id, "created": created}
+
+
+@router.post("/local-export", summary="Local export mode: pull cost data via the Cost Details API into the local export folder and ingest it")
+def local_export(body: LocalExportRequest, request: Request, db: Session = Depends(get_db), user: CurrentUser = Depends(require("ingestion"))):
+    from datetime import UTC, datetime
+
+    from app.core.config import get_settings
+    from worker.ingestion.local_export import MAX_MONTHS, default_range, month_chunks
+
+    s = get_settings()
+    if not s.azure_enabled:
+        raise ValidationFailed("Azure integration is disabled (AZURE_AUTH_MODE=disabled); the Cost Details API cannot be called.")
+    if s.effective_export_source != "local":
+        raise ValidationFailed("Local export mode requires EXPORT_SOURCE=local (current source reads Azure Blob Storage).")
+    today = datetime.now(UTC).date()
+    start, end = (body.start_date, body.end_date or today) if body.start_date else default_range(body.months, today)
+    end = min(end, today)
+    if start > end:
+        raise ValidationFailed("start_date must not be after end_date / today")
+    if len(month_chunks(start, end)) > MAX_MONTHS:
+        raise ValidationFailed(f"At most {MAX_MONTHS} months can be pulled at once")
+    subs = list(db.execute(select(AzureSubscription).where(AzureSubscription.enabled.is_(True), AzureSubscription.is_demo.is_(False)).order_by(AzureSubscription.id)).scalars())
+    if body.subscription_ids:
+        wanted = {x.lower() for x in body.subscription_ids}
+        subs = [x for x in subs if x.subscription_id in wanted]
+    if not subs:
+        raise ValidationFailed("No enabled, non-demo subscriptions selected")
+    params = {"start_date": start.isoformat(), "end_date": end.isoformat(), "dataset_types": list(body.dataset_types)}
+    out = []
+    for sub in subs:
+        job, created = job_service.enqueue_job(db, "local_export", subscription_fk=sub.id, params=params, priority=55, triggered_by=user.email or user.name)
+        out.append({"subscription_id": sub.subscription_id, "subscription_name": sub.subscription_name, "job_id": job.id, "created": created})
+    audit_service.record(db, user, "ingestion.local_export", details={**params, "subscriptions": [o["subscription_id"] for o in out]}, request=request)
+    db.commit()
+    return {"jobs": out, "range": [start.isoformat(), end.isoformat()], "months": len(month_chunks(start, end)),
+            "note": "Jobs run one at a time in the worker; each pulls one report per month and cost type, writes it to the local export folder and ingests it."}
 
 
 @router.post("/analytics", summary="Re-run anomaly detection, savings evaluation and budget alerts")

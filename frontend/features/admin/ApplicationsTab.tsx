@@ -29,7 +29,7 @@ interface App {
 }
 
 const schema = z.object({
-  code: z.string().trim().regex(/^[a-z0-9][a-z0-9_-]{0,63}$/, "Lower-case letters, digits, - and _ (max 64)"),
+  code: z.string().trim().regex(/^[A-Za-z0-9][A-Za-z0-9_-]{0,63}$/, "Letters, digits, - and _ (max 64)"),
   name: z.string().trim().min(1, "Name is required").max(200),
   description: z.string().max(2000),
   owner: z.string().max(200),

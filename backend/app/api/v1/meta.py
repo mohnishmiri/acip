@@ -32,6 +32,7 @@ def client_config():
         } if s.app_auth_mode == "entra" else None,
         "demo_mode": s.demo_mode,
         "azure_integration": s.azure_auth_mode != "disabled",
+        "export_source": s.effective_export_source,  # local | azure_blob
     }
 
 
