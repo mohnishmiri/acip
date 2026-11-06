@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import time
+from datetime import UTC, date, datetime, timedelta
 from typing import Any
 
 from sqlalchemy import select
@@ -18,6 +19,11 @@ DEFAULT_SETTINGS: dict[str, tuple[Any, str]] = {
     "reporting.default_cost_type": ("actual", "Default cost basis: actual or amortized."),
     "reporting.significant_change_pct": (5, "Percentage change below which a movement is treated as normal variation."),
     "reporting.significant_change_abs": (500, "Absolute change (billing currency) below which a movement is treated as normal variation."),
+    "reporting.data_completeness_lag_days": (
+        1,
+        "Days before today (UTC) still being billed by Azure. Relative periods, forecasts, budgets, savings and anomaly detection "
+        "end at the last complete day so a partial day never reads as a cost drop. 0 = use the latest usage date.",
+    ),
     "reporting.default_waterfall_top_n": (4, "Number of individual contributors shown in waterfall charts before grouping the rest into 'Other'."),
     "freshness.delay_threshold_hours": (48, "Hours after which a subscription's latest usage date is considered delayed."),
     "attribution.precedence": (
@@ -74,6 +80,17 @@ def set_setting(db: Session, key: str, value: Any, actor: str) -> None:
     stmt = stmt.on_conflict_do_update(index_elements=["key"], set_={"value": value, "updated_by": actor})
     db.execute(stmt)
     invalidate_cache()
+
+
+def complete_through(db: Session, data_end: date | None, today: date | None = None) -> date | None:
+    """Latest usage date treated as complete: min(latest usage date, today - lag)."""
+    if data_end is None:
+        return None
+    lag = int(get_setting(db, "reporting.data_completeness_lag_days") or 0)
+    if lag <= 0:
+        return data_end
+    today = today or datetime.now(UTC).date()
+    return min(data_end, today - timedelta(days=lag))
 
 
 def week_start(db: Session) -> int:

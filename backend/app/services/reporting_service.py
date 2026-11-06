@@ -274,7 +274,12 @@ class ReportingService:
         if p.as_of:
             as_of = p.as_of
         elif data_end:
-            as_of = data_end
+            as_of = settings_service.complete_through(self.db, data_end) or data_end
+            if as_of < data_end:
+                warnings.append(
+                    f"Usage after {as_of.isoformat()} (latest: {data_end.isoformat()}) is still being billed by Azure and is excluded from "
+                    "relative periods, forecasts and comparisons until complete (setting reporting.data_completeness_lag_days)."
+                )
         else:
             as_of = datetime.now(UTC).date()
             warnings.append("No billing data is available for the selected scope and cost type.")

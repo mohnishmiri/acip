@@ -157,3 +157,43 @@ def test_budgets_and_forecasts(client):
     fc = client.get("/api/v1/forecasts").json()["data"]
     assert set(fc["methods"]) == {"run_rate", "recent", "trend"}
     assert "not actual" in fc["disclaimer"].lower()
+
+
+def test_rerun_over_older_episode_creates_no_duplicates(client, db):
+    """Regression: a scope with several separate episodes must not get duplicates when an
+    older date is re-evaluated (idempotency used to check only the latest episode)."""
+    from datetime import date
+
+    from app.anomaly_detection.engine import AnomalyEngine
+    from app.models import CostAnomaly
+    from app.services.analytics_runner import run_analytics
+
+    run_analytics(db, lookback_days=60, notify=False)
+    db.commit()
+    a = db.query(CostAnomaly).filter(CostAnomaly.rule_code == "DAILY_RESOURCE_SPIKE").order_by(CostAnomaly.id).first()
+    assert a is not None
+    # add a later, separate episode for the same scope
+    later = CostAnomaly(**{c.name: getattr(a, c.name) for c in CostAnomaly.__table__.columns if c.name not in ("id",)})
+    later.detection_date = later.last_detected_date = date(2026, 11, 30)
+    db.add(later)
+    db.commit()
+    before = db.query(CostAnomaly).count()
+    AnomalyEngine(db, "actual").run(lookback_days=60)
+    db.commit()
+    assert db.query(CostAnomaly).count() == before
+    db.delete(later)
+    db.commit()
+
+
+def test_new_resource_rule_requires_prior_history(db):
+    """Resources first seen when their subscription's data begins are not 'new'."""
+    from sqlalchemy import func, select
+
+    from app.models import AzureResource, CostAnomaly, DailyCostAggregate
+
+    t = DailyCostAggregate.__table__
+    flagged = db.execute(select(CostAnomaly.resource_key).where(CostAnomaly.rule_code == "NEW_EXPENSIVE_RESOURCE")).scalars().all()
+    starts = dict(db.execute(select(t.c.subscription_fk, func.min(t.c.usage_date)).where(t.c.dataset_type == "actual").group_by(t.c.subscription_fk)).all())
+    for key in flagged:
+        r = db.execute(select(AzureResource).where(AzureResource.resource_key == key)).scalar_one()
+        assert (r.first_seen_date - starts[r.subscription_fk]).days >= 7

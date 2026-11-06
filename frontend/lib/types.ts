@@ -163,6 +163,7 @@ export interface Freshness {
   status: string;
   status_label: string;
   latest_usage_date: string | null;
+  complete_through?: string | null; // reports anchor here; later dates are still being billed
   oldest_latest_usage_date: string | null;
   last_successful_ingestion: string | null;
   last_ingestion_attempt: string | null;

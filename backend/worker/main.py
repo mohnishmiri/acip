@@ -21,7 +21,7 @@ from pathlib import Path
 from sqlalchemy import select, text
 
 from app.core.config import get_settings
-from app.core.db import get_engine, session_factory
+from app.core.db import get_engine, session_factory, use_batch_mode
 from app.core.logging import configure_logging, log_context
 from app.models import AzureSubscription
 from app.services import job_service, notification_service
@@ -125,6 +125,7 @@ def run_job(job) -> None:
 def main() -> None:
     s = get_settings()
     configure_logging(s.log_level, s.log_format)
+    use_batch_mode()
     signal.signal(signal.SIGTERM, _on_signal)
     signal.signal(signal.SIGINT, _on_signal)
     worker_id = f"{socket.gethostname()}-{os.getpid()}"

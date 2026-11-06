@@ -19,7 +19,7 @@ from datetime import UTC, date, datetime, timedelta
 from decimal import Decimal
 from typing import Any
 
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.analytics.comparison import ZERO, money, pct_out, qty, to_decimal
@@ -74,6 +74,8 @@ class AnomalyEngine:
             _, data_end = self.repo.date_bounds(f)
             if data_end is None:
                 continue
+            # never evaluate a day Azure is still billing (it would look like a drop / understate windows)
+            data_end = settings_service.complete_through(self.db, data_end) or data_end
             end_d = min(end or data_end, data_end)
             start_d = start or (end_d - timedelta(days=lookback - 1))
             self._series_cache.clear()
@@ -193,6 +195,13 @@ class AnomalyEngine:
         p = self._params(rule, {})
         lookback = int(p.get("lookback_days", 7))
         threshold = to_decimal(p.get("min_daily_cost", 50))
+        # A resource is only "new" if its subscription has billing history from before it appeared;
+        # otherwise every resource looks new right after a subscription's first data load.
+        prior = timedelta(days=int(p.get("min_prior_history_days", 7)))
+        t = DailyCostAggregate.__table__
+        sub_start = dict(self.db.execute(
+            select(t.c.subscription_fk, func.min(t.c.usage_date)).where(t.c.dataset_type == self.dataset_type, t.c.billing_currency == currency).group_by(t.c.subscription_fk)
+        ).all())
         scopes = {s.key: s for s in self._scopes("resource", f, start, end)}
         new_res = self.db.execute(
             select(AzureResource).where(AzureResource.first_seen_date >= start - timedelta(days=lookback), AzureResource.first_seen_date <= end)
@@ -202,6 +211,9 @@ class AnomalyEngine:
             if sc is None or not self._passes(rule, sc.attrs):
                 continue
             first = res.first_seen_date
+            since = sub_start.get(res.subscription_fk)
+            if since is None or first < since + prior:
+                continue  # not enough history before the resource appeared to call it new
             # no billing records before first_seen in the history window -> genuinely new
             if any(d < first and v != ZERO for d, v in sc.series.items()):
                 continue
@@ -335,19 +347,25 @@ class AnomalyEngine:
     def _upsert(self, rule: AnomalyRule, sc: ScopeSeries, det: R.Detection, target: date, f: CostFilters, currency: str,
                 params: dict[str, Any], stats: dict[str, Any], severity_basis: Decimal | None = None) -> None:
         scope_key = f"{rule.scope_level}:{sc.key}"
+        same_scope = (CostAnomaly.rule_code == rule.code, CostAnomaly.scope_key == scope_key, CostAnomaly.billing_currency == currency,
+                      CostAnomaly.dataset_type == self.dataset_type)
+        # Idempotency: ANY existing episode (not only the latest) that already covers this date wins.
+        covered = self.db.execute(
+            select(CostAnomaly.id).where(*same_scope, CostAnomaly.detection_date <= target, CostAnomaly.last_detected_date >= target).limit(1)
+        ).first()
+        if covered:
+            stats["skipped_existing"] += 1
+            return
+        # Episode merging: extend the active episode that ended just before this date.
         existing = self.db.execute(
             select(CostAnomaly)
-            .where(CostAnomaly.rule_code == rule.code, CostAnomaly.scope_key == scope_key, CostAnomaly.billing_currency == currency,
-                   CostAnomaly.dataset_type == self.dataset_type)
+            .where(*same_scope, CostAnomaly.last_detected_date < target, CostAnomaly.last_detected_date >= target - timedelta(days=EPISODE_GAP_DAYS))
             .order_by(CostAnomaly.last_detected_date.desc())
             .limit(1)
         ).scalar_one_or_none()
-        if existing and existing.detection_date <= target <= existing.last_detected_date:
-            stats["skipped_existing"] += 1
-            return
         abs_inc = severity_basis if severity_basis is not None else det.abs_increase
         severity = R.classify_severity(abs_inc, det.pct_increase, self.severity_thresholds, self.sensitivity)
-        if existing and existing.status in ACTIVE and target > existing.last_detected_date and (target - existing.last_detected_date).days <= EPISODE_GAP_DAYS:
+        if existing and existing.status in ACTIVE:
             existing.last_detected_date = target
             existing.occurrence_count += 1
             existing.period_end = max(existing.period_end, det.period_end)

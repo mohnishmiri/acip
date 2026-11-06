@@ -30,7 +30,8 @@ class Settings(BaseSettings):
     database_url: str = "postgresql+psycopg://acip:acip@postgres:5432/acip"
     db_pool_size: int = 10
     db_max_overflow: int = 10
-    db_statement_timeout_ms: int = 60000
+    db_statement_timeout_ms: int = 60000  # interactive API requests
+    db_batch_statement_timeout_ms: int = 900000  # worker / CLI batch work (ingestion, aggregation)
 
     # --- Demo mode -----------------------------------------------------------------
     demo_mode: bool = Field(default=True, description="Seed and display clearly-labelled DEMO data")

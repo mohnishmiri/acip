@@ -95,7 +95,7 @@ def evaluate_budget(db: Session, b: Budget, labels: LabelResolver, *, method: st
     repo = CostRepository(db, ws)
     f = filters_for_budget(db, b, labels, allowed)
     _, data_end = repo.date_bounds(f)
-    as_of = data_end or date.today()
+    as_of = settings_service.complete_through(db, data_end) or date.today()
     if b.period_type == "monthly":
         ps, pe = P.month_start(as_of), P.month_end(as_of)
     else:

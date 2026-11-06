@@ -79,7 +79,7 @@ ANOMALY_RULES = [
         "detection_type": "new_resource",
         "scope_level": "resource",
         "filters": {},
-        "params": {"lookback_days": 7, "min_daily_cost": 40},
+        "params": {"lookback_days": 7, "min_daily_cost": 40, "min_prior_history_days": 7},
     },
     {
         "code": "NON_PROD_DAILY_SPIKE",

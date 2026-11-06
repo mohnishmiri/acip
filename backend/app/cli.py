@@ -21,7 +21,7 @@ from pathlib import Path
 from sqlalchemy import text
 
 from app.core.config import get_settings
-from app.core.db import get_engine, session_scope
+from app.core.db import get_engine, session_scope, use_batch_mode
 from app.core.logging import configure_logging
 
 log = logging.getLogger("acip.cli")
@@ -135,6 +135,7 @@ def export_local(args) -> dict:
 def main(argv: list[str] | None = None) -> int:
     s = get_settings()
     configure_logging(s.log_level, "text")
+    use_batch_mode()
     p = argparse.ArgumentParser(prog="acip")
     p.add_argument("command", choices=["init", "migrate", "seed-demo", "reset-demo", "analytics", "retention", "test-connections", "export-local", "dump-schema"])
     p.add_argument("--lookback-days", type=int, default=None)

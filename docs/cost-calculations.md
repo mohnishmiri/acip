@@ -16,7 +16,13 @@ and are shared by every endpoint; the frontend never recomputes them. Arithmetic
 
 ## Periods (`app/analytics/periods.py`)
 
-**As-of date** = latest usage date with data in the current scope (override with `as_of`).
+**As-of date** = latest *complete* usage date in the current scope (override with `as_of`):
+`min(latest usage date, today (UTC) − reporting.data_completeness_lag_days)`, default lag 1 day.
+Azure keeps adding usage to the current (and sometimes previous) day for hours, so anchoring on
+a partial day would read as a cost drop (e.g. a day with $76 of an eventual ~$3,000). Forecasts,
+budgets, savings evaluation and anomaly detection use the same anchor; the partial day stays
+stored and is replaced by the next export run / pull. The header shows "Data through <complete
+day> · <latest day> updating". Set the lag to 0 to anchor on the latest usage date.
 Presets are resolved against it: `today`, `yesterday`, `last_7_days`, `last_30_days`,
 `last_90_days`, `week_to_date`, `previous_week`, `month_to_date`, `previous_month`,
 `quarter_to_date`, `previous_quarter`, `year_to_date`, `previous_year`, `custom`.
@@ -123,6 +129,13 @@ Rules combine **relative** (% over baseline) and **absolute** (minimum currency 
 significance; both must be met. Purchases, refunds, tax and rounding charges are excluded
 (`anomaly.exclude_charge_types`). Thresholds are scaled by `anomaly.sensitivity`
 (low × 1.5, medium × 1.0, high × 0.67).
+
+Detection is idempotent: a date already covered by *any* episode of the same rule and scope is
+skipped, and a detection on the day after an active episode (within 2 days) extends that episode
+instead of opening a new one, so one ongoing issue raises one anomaly and one notification.
+*New expensive resource* additionally requires `min_prior_history_days` (default 7) of billing
+history for the subscription before the resource first appeared -- right after a subscription's
+first data load every resource would otherwise look new.
 
 | Rule (seeded) | Scope | Baseline | Default trigger |
 |---|---|---|---|

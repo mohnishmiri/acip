@@ -301,11 +301,11 @@ def apply_run(
         text(
             f"""INSERT INTO azure_resources (resource_key, {', '.join(_RESOURCE_ATTRS)}, subscription_fk, first_seen_date, last_seen_date, is_demo)
                 SELECT DISTINCT ON (s.resource_key) s.resource_key, {', '.join('s.' + c for c in _RESOURCE_ATTRS)},
-                       s.subscription_fk, b.first_seen, b.last_seen, s.is_demo
+                       s.subscription_fk,
+                       MIN(s.usage_date) OVER (PARTITION BY s.resource_key) AS first_seen,
+                       MAX(s.usage_date) OVER (PARTITION BY s.resource_key) AS last_seen,
+                       s.is_demo
                   FROM cost_records_staging s
-                  JOIN (SELECT resource_key, MIN(usage_date) AS first_seen, MAX(usage_date) AS last_seen
-                          FROM cost_records_staging WHERE export_run_id = :r AND resource_key <> '' GROUP BY resource_key) b
-                    USING (resource_key)
                  WHERE s.export_run_id = :r AND s.resource_key <> ''
                  ORDER BY s.resource_key, s.usage_date DESC, s.cost DESC
                 ON CONFLICT (resource_key) DO UPDATE SET {upd},
@@ -465,6 +465,9 @@ def process_run(
                 if expected is not None and expected != fr.rows_read:
                     raise RunValidationError(f"Completeness check failed for {b.path}: manifest reports {expected} rows, file contains {fr.rows_read}")
 
+            # The UNLOGGED staging table is bulk-loaded via COPY; refresh planner statistics so the
+            # apply step does not plan against an "empty" table (that caused nested-loop rescans).
+            conn.execute(text("ANALYZE cost_records_staging"))
             rows_read = sum(r.rows_read for r in file_results)
             rows_loaded = sum(r.rows_loaded for r in file_results)
             rows_rejected = sum(r.rows_rejected for r in file_results)

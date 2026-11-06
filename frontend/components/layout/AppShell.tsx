@@ -133,7 +133,10 @@ function FreshnessIndicator() {
   const tip = (
     <Box sx={{ p: 0.5 }}>
       <div>Status: {data.status_label}</div>
-      <div>Latest usage date: {longDate(data.latest_usage_date)}</div>
+      <div>Complete through: {longDate(data.complete_through ?? data.latest_usage_date)}</div>
+      {data.complete_through && data.latest_usage_date && data.complete_through < data.latest_usage_date && (
+        <div>Latest usage date: {longDate(data.latest_usage_date)} (partial — Azure is still billing it)</div>
+      )}
       {data.oldest_latest_usage_date && data.oldest_latest_usage_date !== data.latest_usage_date && <div>Oldest subscription data: {longDate(data.oldest_latest_usage_date)}</div>}
       <div>Last successful ingestion: {dateTime(data.last_successful_ingestion)}</div>
       <div>Last ingestion attempt: {dateTime(data.last_ingestion_attempt)}</div>
@@ -148,7 +151,8 @@ function FreshnessIndicator() {
       <Stack direction="row" spacing={1} alignItems="center" data-testid="freshness">
         <StatusChip value={data.status} label={data.status_label} />
         <Typography variant="caption" sx={{ display: { xs: "none", lg: "block" } }}>
-          Data through <b>{longDate(data.latest_usage_date)}</b> (UTC)
+          Data through <b>{longDate(data.complete_through ?? data.latest_usage_date)}</b> (UTC)
+          {data.complete_through && data.latest_usage_date && data.complete_through < data.latest_usage_date ? ` · ${longDate(data.latest_usage_date).slice(0, 6)} updating` : ""}
         </Typography>
       </Stack>
     </Tooltip>

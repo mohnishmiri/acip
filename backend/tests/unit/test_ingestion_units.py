@@ -116,3 +116,15 @@ def test_common_data_and_messaging_services_have_categories():
     assert e.categorize({"meter_category": "Event Hubs"}) == "Messaging & Integration"
     assert e.categorize({"meter_category": "Azure Database for PostgreSQL"}) == "Other Databases"
     assert e.categorize({"meter_category": "Backup"}) == "Other Services"
+
+
+def test_complete_through_excludes_days_still_being_billed(monkeypatch):
+    from datetime import date
+
+    from app.services import settings_service
+
+    monkeypatch.setattr(settings_service, "get_setting", lambda db, key: 1)
+    assert settings_service.complete_through(None, date(2026, 11, 6), today=date(2026, 11, 6)) == date(2026, 11, 5)
+    assert settings_service.complete_through(None, date(2026, 11, 1), today=date(2026, 11, 6)) == date(2026, 11, 1)  # older data untouched
+    monkeypatch.setattr(settings_service, "get_setting", lambda db, key: 0)
+    assert settings_service.complete_through(None, date(2026, 11, 6), today=date(2026, 11, 6)) == date(2026, 11, 6)

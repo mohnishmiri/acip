@@ -89,6 +89,9 @@ def overall_freshness(db: Session, allowed: set[int] | None = None) -> dict[str,
     else:
         overall = "delayed"
     latest = max((s["latest_usage_date"]["actual"] for s in subs if s["latest_usage_date"]["actual"]), default=None)
+    from datetime import date as _date
+
+    complete = settings_service.complete_through(db, _date.fromisoformat(latest)) if latest else None
     oldest = min((s["latest_usage_date"]["actual"] for s in subs if s["latest_usage_date"]["actual"]), default=None)
     last_ok = max((s["last_successful_sync_at"] for s in subs if s["last_successful_sync_at"]), default=None)
     last_attempt = max((s["last_sync_attempt_at"] for s in subs if s["last_sync_attempt_at"]), default=None)
@@ -106,6 +109,8 @@ def overall_freshness(db: Session, allowed: set[int] | None = None) -> dict[str,
         "status": overall,
         "status_label": labels.get(overall, overall),
         "latest_usage_date": latest,
+        # reports anchor here; later usage dates are partial (still being billed by Azure)
+        "complete_through": complete.isoformat() if complete else None,
         "oldest_latest_usage_date": oldest,
         "last_successful_ingestion": last_ok,
         "last_ingestion_attempt": last_attempt,

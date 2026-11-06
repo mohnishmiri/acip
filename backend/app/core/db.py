@@ -11,6 +11,16 @@ from app.core.config import get_settings
 
 _engine: Engine | None = None
 _SessionLocal: sessionmaker[Session] | None = None
+_batch_mode = False
+
+
+def use_batch_mode() -> None:
+    """Call before the first DB access in batch processes (worker, CLI) to use the longer
+    statement timeout appropriate for ingestion and aggregate rebuilds."""
+    global _batch_mode
+    if _engine is not None and not _batch_mode:
+        reset_engine()
+    _batch_mode = True
 
 
 def get_engine() -> Engine:
@@ -24,7 +34,7 @@ def get_engine() -> Engine:
             pool_pre_ping=True,
             future=True,
         )
-        timeout = settings.db_statement_timeout_ms
+        timeout = settings.db_batch_statement_timeout_ms if _batch_mode else settings.db_statement_timeout_ms
 
         @event.listens_for(_engine, "connect")
         def _on_connect(dbapi_conn, _record):  # pragma: no cover - driver hook

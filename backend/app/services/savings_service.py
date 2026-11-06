@@ -62,7 +62,8 @@ def evaluate_savings(db: Session, dataset_type: str = "actual") -> dict[str, Any
 
     for cur in currencies:
         f = CostFilters(dataset_type=dataset_type, currency=cur, charge_types=["Usage"])
-        _, as_of = repo.date_bounds(f)
+        _, data_end = repo.date_bounds(f)
+        as_of = settings_service.complete_through(db, data_end)
         if as_of is None:
             continue
         p14 = Period(as_of - timedelta(days=13), as_of)
