@@ -19,6 +19,7 @@ import time
 from pathlib import Path
 
 from sqlalchemy import text
+from sqlalchemy.engine import make_url
 
 from app.core.config import get_settings
 from app.core.db import get_engine, session_scope, use_batch_mode
@@ -54,7 +55,10 @@ def wait_for_db(timeout: int = 90) -> None:
             msg = str(exc)
             # Wrong credentials never fix themselves -- fail fast with an explanation instead of retrying.
             if "password authentication failed" in msg or ("does not exist" in msg and ("role" in msg or "database" in msg)):
-                raise SystemExit(CREDENTIALS_HELP.format(error=msg.strip().splitlines()[0])) from exc
+                first_line = msg.strip().splitlines()[0]
+                if make_url(get_settings().database_url).host != "postgres":
+                    raise SystemExit(f"Database login failed: {first_line}") from exc
+                raise SystemExit(CREDENTIALS_HELP.format(error=first_line)) from exc
             if time.time() > deadline:
                 raise SystemExit(f"Database not reachable: {exc}") from exc
             log.info("Waiting for database…")
@@ -183,8 +187,6 @@ def main(argv: list[str] | None = None) -> int:
             result = {"results": test_all(db)}
     else:
         import subprocess
-
-        from sqlalchemy.engine import make_url
 
         url = make_url(s.database_url)
         env = {"PGPASSWORD": url.password or ""}

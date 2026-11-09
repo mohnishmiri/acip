@@ -1,0 +1,9 @@
+# Use an external PostgreSQL (e.g. Azure Database for PostgreSQL Flexible Server) instead of the
+# local container. Set DATABASE_URL in .env, then either:
+#   docker compose -f docker-compose.yml -f docker-compose.external-db.yml up --build
+# or set COMPOSE_PATH_SEPARATOR=: and COMPOSE_FILE=docker-compose.yml:docker-compose.external-db.yml in .env.
+services:
+  postgres:
+    profiles: ["local-db"]
+  init:
+    depends_on: !reset {}

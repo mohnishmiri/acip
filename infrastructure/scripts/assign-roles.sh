@@ -8,10 +8,13 @@
 # Roles:
 #   Cost Management Reader   on each subscription  -> cost query probe, list exports, Cost Details API
 #   Storage Blob Data Reader on the export storage -> read export files
-#   Key Vault Secrets User   on the vault          -> Secrets Store CSI driver (database URL)
+#   Key Vault Secrets User   on the vault          -> only when this principal is also the akv2k8s
+#                                                     controller identity (it syncs Key Vault -> AKS)
 #   Reader (optional --reader) on each subscription -> Azure Advisor recommendations, Activity Log evidence
 # Never grant Owner or Contributor for reading billing data.
 set -euo pipefail
+# Git Bash on Windows would otherwise rewrite /subscriptions/... arguments into C:/Program Files/Git/...
+export MSYS_NO_PATHCONV=1
 
 APP_ID="" SUBS="" STORAGE_ID="" KV_ID="" READER=0
 while [[ $# -gt 0 ]]; do

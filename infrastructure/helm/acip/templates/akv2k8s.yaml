@@ -1,0 +1,88 @@
+{{- if .Values.keyVault.enabled }}
+{{- /*
+Azure Key Vault -> Kubernetes Secrets with akv2k8s (https://akv2k8s.io, AzureKeyVaultSecret CRD).
+The akv2k8s controller must be installed in the cluster; it reads the vault with ITS OWN identity,
+which needs get on secrets and certificates. ACIP pods never talk to Key Vault.
+*/ -}}
+{{- $fullname := include "acip.fullname" . }}
+# Database URL. A pre-install hook so the Secret exists before the migration hook on first install.
+# Hooks are not re-applied on upgrade: after changing keyVault.name / databaseUrlSecretName run
+#   kubectl -n <ns> delete akvs {{ $fullname }}-db   and reinstall, or edit it with kubectl.
+apiVersion: spv.no/v2beta1
+kind: AzureKeyVaultSecret
+metadata:
+  name: {{ $fullname }}-db
+  labels:
+    {{- include "acip.labels" . | nindent 4 }}
+  annotations:
+    helm.sh/hook: pre-install
+    helm.sh/hook-weight: "-30"
+spec:
+  vault:
+    name: {{ .Values.keyVault.name | quote }}
+    object:
+      name: {{ .Values.keyVault.databaseUrlSecretName | quote }}
+      type: secret
+  output:
+    secret:
+      name: {{ include "acip.dbSecretName" . }}
+      dataKey: {{ .Values.database.secretKey }}
+{{- if .Values.keyVault.smtpPasswordSecretName }}
+---
+apiVersion: spv.no/v2beta1
+kind: AzureKeyVaultSecret
+metadata:
+  name: {{ $fullname }}-smtp
+  labels:
+    {{- include "acip.labels" . | nindent 4 }}
+spec:
+  vault:
+    name: {{ .Values.keyVault.name | quote }}
+    object:
+      name: {{ .Values.keyVault.smtpPasswordSecretName | quote }}
+      type: secret
+  output:
+    secret:
+      name: {{ $fullname }}-smtp
+      dataKey: SMTP_PASSWORD
+{{- end }}
+{{- if .Values.keyVault.graphMailSecretName }}
+---
+apiVersion: spv.no/v2beta1
+kind: AzureKeyVaultSecret
+metadata:
+  name: {{ $fullname }}-graph-mail
+  labels:
+    {{- include "acip.labels" . | nindent 4 }}
+spec:
+  vault:
+    name: {{ .Values.keyVault.name | quote }}
+    object:
+      name: {{ .Values.keyVault.graphMailSecretName | quote }}
+      type: secret
+  output:
+    secret:
+      name: {{ $fullname }}-graph-mail
+      dataKey: GRAPH_MAIL_CLIENT_SECRET
+{{- end }}
+{{- if and .Values.ingress.enabled .Values.ingress.tls.enabled .Values.keyVault.tlsCertificateName }}
+---
+# Ingress TLS certificate (Key Vault certificate -> kubernetes.io/tls Secret with tls.crt / tls.key)
+apiVersion: spv.no/v2beta1
+kind: AzureKeyVaultSecret
+metadata:
+  name: {{ $fullname }}-tls
+  labels:
+    {{- include "acip.labels" . | nindent 4 }}
+spec:
+  vault:
+    name: {{ .Values.keyVault.name | quote }}
+    object:
+      name: {{ .Values.keyVault.tlsCertificateName | quote }}
+      type: certificate
+  output:
+    secret:
+      name: {{ .Values.ingress.tls.secretName }}
+      type: kubernetes.io/tls
+{{- end }}
+{{- end }}

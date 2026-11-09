@@ -1,13 +1,10 @@
 {{- /*
 Migration hook (pre-install / pre-upgrade): runs `alembic upgrade head` BEFORE new pods roll.
 Hook resources cannot depend on regular release objects (they do not exist yet on first
-install), so the hook brings its own ServiceAccount and SecretProviderClass and reads the
-database URL directly from the mounted Key Vault file.
-With keyVault.enabled, federate the existing app registration with this service account too:
-  subject system:serviceaccount:<namespace>:<fullname>-migrate
+install), so the hook brings its own ServiceAccount. DATABASE_URL comes from the Secret synced by
+akv2k8s (AzureKeyVaultSecret <fullname>-db, itself a pre-install hook); the pod waits until it exists.
 */ -}}
 {{- $fullname := include "acip.fullname" . -}}
-{{- $kvFile := printf "/mnt/secrets-store/%s" .Values.keyVault.databaseUrlSecretName -}}
 {{- if .Values.migrations.enabled }}
 apiVersion: v1
 kind: ServiceAccount
@@ -19,37 +16,8 @@ metadata:
     helm.sh/hook: pre-install,pre-upgrade
     helm.sh/hook-weight: "-20"
     helm.sh/hook-delete-policy: before-hook-creation
-    {{- if .Values.serviceAccount.workloadIdentity.enabled }}
-    azure.workload.identity/client-id: {{ include "acip.kvClientId" . | quote }}
-    azure.workload.identity/tenant-id: {{ .Values.serviceAccount.workloadIdentity.tenantId | quote }}
-    {{- end }}
 automountServiceAccountToken: false
 ---
-{{- if .Values.keyVault.enabled }}
-apiVersion: secrets-store.csi.x-k8s.io/v1
-kind: SecretProviderClass
-metadata:
-  name: {{ $fullname }}-migrate-kv
-  labels:
-    {{- include "acip.labels" . | nindent 4 }}
-  annotations:
-    helm.sh/hook: pre-install,pre-upgrade
-    helm.sh/hook-weight: "-20"
-    helm.sh/hook-delete-policy: before-hook-creation
-spec:
-  provider: azure
-  parameters:
-    usePodIdentity: "false"
-    clientID: {{ include "acip.kvClientId" . | quote }}
-    keyvaultName: {{ .Values.keyVault.name | quote }}
-    tenantId: {{ .Values.keyVault.tenantId | quote }}
-    objects: |
-      array:
-        - |
-          objectName: {{ .Values.keyVault.databaseUrlSecretName }}
-          objectType: secret
----
-{{- end }}
 apiVersion: batch/v1
 kind: Job
 metadata:
@@ -69,9 +37,6 @@ spec:
     metadata:
       labels:
         {{- include "acip.selectorLabels" (dict "ctx" . "component" "migrate") | nindent 8 }}
-        {{- if .Values.keyVault.enabled }}
-        {{- include "acip.workloadIdentityLabel" . | nindent 8 }}
-        {{- end }}
     spec:
       restartPolicy: Never
       serviceAccountName: {{ $fullname }}-migrate
@@ -81,24 +46,17 @@ spec:
         - name: migrate
           image: {{ include "acip.image" (dict "ctx" . "component" "backend") }}
           imagePullPolicy: {{ .Values.image.backend.pullPolicy }}
-          {{- if .Values.keyVault.enabled }}
-          command: ["/bin/sh", "-c"]
-          args: ['export DATABASE_URL="$(cat {{ $kvFile }})" && exec python -m app.cli migrate']
-          {{- else }}
           command: ["python", "-m", "app.cli", "migrate"]
-          {{- end }}
           env:
             - name: LOG_FORMAT
               value: json
             - name: PYTHONDONTWRITEBYTECODE
               value: "1"
-            {{- if not .Values.keyVault.enabled }}
             - name: DATABASE_URL
               valueFrom:
                 secretKeyRef:
                   name: {{ include "acip.dbSecretName" . }}
                   key: {{ .Values.database.secretKey }}
-            {{- end }}
           securityContext:
             {{- toYaml .Values.containerSecurityContext | nindent 12 }}
           resources:
@@ -107,22 +65,9 @@ spec:
           volumeMounts:
             - name: tmp
               mountPath: /tmp
-            {{- if .Values.keyVault.enabled }}
-            - name: secrets-store
-              mountPath: /mnt/secrets-store
-              readOnly: true
-            {{- end }}
       volumes:
         - name: tmp
           emptyDir: {}
-        {{- if .Values.keyVault.enabled }}
-        - name: secrets-store
-          csi:
-            driver: secrets-store.csi.k8s.io
-            readOnly: true
-            volumeAttributes:
-              secretProviderClass: {{ $fullname }}-migrate-kv
-        {{- end }}
 {{- end }}
 {{- if .Values.init.enabled }}
 ---
@@ -157,23 +102,8 @@ spec:
         - name: init
           image: {{ include "acip.image" (dict "ctx" . "component" "backend") }}
           imagePullPolicy: {{ .Values.image.backend.pullPolicy }}
-          {{- if .Values.keyVault.enabled }}
-          command: ["/bin/sh", "-c"]
-          args: ['export DATABASE_URL="$(cat {{ $kvFile }})" && exec python -m app.cli init']
-          envFrom:
-            - configMapRef:
-                name: {{ $fullname }}-config
-          env:
-            - name: PYTHONDONTWRITEBYTECODE
-              value: "1"
-            {{- if .Values.subscriptionsConfig.enabled }}
-            - name: AZURE_SUBSCRIPTIONS_CONFIG
-              value: /config/subscriptions.json
-            {{- end }}
-          {{- else }}
           command: ["python", "-m", "app.cli", "init"]
           {{- include "acip.backendEnv" . | nindent 10 }}
-          {{- end }}
           securityContext:
             {{- toYaml .Values.containerSecurityContext | nindent 12 }}
           resources:

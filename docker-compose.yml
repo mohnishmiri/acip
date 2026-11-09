@@ -7,7 +7,7 @@ x-backend-env: &backend-env
   APP_ENV: local
   LOG_LEVEL: ${LOG_LEVEL:-INFO}
   LOG_FORMAT: ${LOG_FORMAT:-text}
-  DATABASE_URL: postgresql+psycopg://${POSTGRES_USER:-acip}:${POSTGRES_PASSWORD:-acip_local_dev}@postgres:5432/${POSTGRES_DB:-acip}
+  DATABASE_URL: ${DATABASE_URL:-postgresql+psycopg://${POSTGRES_USER:-acip}:${POSTGRES_PASSWORD:-acip_local_dev}@postgres:5432/${POSTGRES_DB:-acip}}
   DEMO_MODE: ${DEMO_MODE:-true}
   CORS_ORIGINS: ${CORS_ORIGINS:-http://localhost:3000}
   # application user sign-in (Entra ID) -- disabled locally by default
@@ -161,7 +161,7 @@ services:
       postgres:
         condition: service_healthy
 
-# Extra CA trusted only while installing packages (TLS-inspecting corporate proxies).
+# Optional root CA of a TLS-inspecting corporate proxy (npm/pip at build time; backend image trusts it at runtime).
 secrets:
   corporate_ca:
     file: ${CORPORATE_CA_FILE:-./certs/empty-ca.crt}

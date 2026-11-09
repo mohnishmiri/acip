@@ -72,9 +72,30 @@ echo 'CORPORATE_CA_FILE=./certs/corporate-ca.pem' >> .env
 docker compose up --build
 ```
 
-Compose passes the file as the `corporate_ca` build secret. It is trusted only during
-`npm ci` and `pip install` and is not copied into the images. Without the setting, an
-empty placeholder (`certs/empty-ca.crt`) is used and builds behave as before.
+Compose passes the file as the `corporate_ca` build secret. The frontend trusts it only
+during `npm ci`. The backend image adds it to the system CA store, because runtime calls to
+Azure (ARM, Entra ID, Blob Storage) also traverse the proxy; `SSL_CERT_FILE`,
+`REQUESTS_CA_BUNDLE` and `PIP_CERT` point at that store. Without the setting, an empty
+placeholder (`certs/empty-ca.crt`) is used and builds behave as before.
+
+## External PostgreSQL (Azure Flexible Server)
+
+1. Create a dedicated database (and preferably a dedicated login that owns it) on the server.
+   `init` runs Alembic migrations that create the ACIP schema in that database.
+2. In `.env`, set `DATABASE_URL` (URL-encode special characters in the password) and enable the
+   override that removes the local `postgres` container:
+
+   ```bash
+   DATABASE_URL=postgresql+psycopg://<user>:<password>@<server>.postgres.database.azure.com:5432/acip?sslmode=verify-full&sslrootcert=system
+   COMPOSE_PATH_SEPARATOR=:
+   COMPOSE_FILE=docker-compose.yml:docker-compose.external-db.yml
+   ```
+
+3. `docker compose up --build`. The Docker host must reach the server on port 5432 (private
+   endpoint / VNet access when public network access is disabled).
+
+`POSTGRES_*` variables and the `pgdata` volume are ignored in this mode; existing local data is
+not copied.
 
 ## Connecting real Azure data locally
 

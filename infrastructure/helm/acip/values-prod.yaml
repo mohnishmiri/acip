@@ -18,6 +18,8 @@ frontend:
   autoscaling: { enabled: true, minReplicas: 2, maxReplicas: 6 }
 keyVault:
   name: kv-acip-prod
+  # Name of the certificate in Key Vault (rename if yours differs)
+  tlsCertificateName: acip-tls
 networkPolicy:
   enabled: true
 ingress:

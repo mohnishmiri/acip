@@ -58,9 +58,36 @@ az keyvault secret set --vault-name <keyVaultName> -n acip-database-url \
   --value "postgresql+psycopg://acip_app:<password>@<postgresFqdn>:5432/acip?sslmode=require"
 ```
 
-The chart's `SecretProviderClass` syncs it into the Kubernetes Secret `<release>-db`
+The chart's `AzureKeyVaultSecret` (akv2k8s) syncs it into the Kubernetes Secret `<release>-db`
 (key `DATABASE_URL`). Alternatively set `keyVault.enabled=false` and create that Secret yourself
 (`database.secretName`).
+
+### Key Vault → AKS sync with akv2k8s
+
+Secrets and the ingress TLS certificate are synced by [akv2k8s](https://akv2k8s.io) (controller
+only; the env injector is not used). Install it once per cluster:
+
+```bash
+helm repo add spv-charts https://charts.spvapi.no
+helm upgrade --install akv2k8s spv-charts/akv2k8s -n akv2k8s --create-namespace \
+  --set env_injector.enabled=false
+```
+
+The controller reads the vault with its own identity (by default the AKS kubelet identity; or Workload
+Identity, see the akv2k8s docs). Grant that identity **Key Vault Secrets User** and **Key Vault
+Certificate User** on the vault (RBAC), or `get` on secrets and certificates (access policies).
+
+| Key Vault object | Value | Kubernetes Secret |
+|---|---|---|
+| secret `keyVault.databaseUrlSecretName` | `acip-database-url` | `<release>-db` (`DATABASE_URL`) |
+| secret `keyVault.smtpPasswordSecretName` (optional) | — | `<release>-smtp` (`SMTP_PASSWORD`) |
+| secret `keyVault.graphMailSecretName` (optional) | — | `<release>-graph-mail` (`GRAPH_MAIL_CLIENT_SECRET`) |
+| certificate `keyVault.tlsCertificateName` | staging `attcc-acip-stage-tls` | `ingress.tls.secretName` (`kubernetes.io/tls`) |
+
+The database `AzureKeyVaultSecret` is a `pre-install` hook so the Secret exists before the migration
+hook on first install. Helm does not re-apply it on upgrade; after changing `keyVault.name` or
+`keyVault.databaseUrlSecretName`, update it with `kubectl -n acip edit akvs acip-db`.
+Check sync status with `kubectl -n acip get akvs`.
 
 ## 4. Workload Identity federation (no secret in the cluster)
 
@@ -69,9 +96,9 @@ The chart's `SecretProviderClass` syncs it into the Kubernetes Secret `<release>
   --resource-group rg-acip-prod --cluster <aksName> --namespace acip --release acip
 ```
 
-This adds federated credentials on the **existing** app registration for
-`system:serviceaccount:acip:acip` (API, worker, init job) and
-`system:serviceaccount:acip:acip-migrate` (migration hook). Equivalent manual command:
+This adds a federated credential on the **existing** app registration for
+`system:serviceaccount:acip:acip` (API, worker, init job). The migration hook needs no Azure
+identity. Equivalent manual command:
 
 ```bash
 az ad app federated-credential create --id <collector-app-client-id> --parameters '{
@@ -100,7 +127,7 @@ Create the SPA and API app registrations and app roles as described in
 
 Create a values file for your environment (e.g. `my-prod.yaml`) overriding at least:
 `global.imageRegistry`, `image.*.tag`, `serviceAccount.workloadIdentity.clientId/tenantId`,
-`keyVault.name/tenantId`, `config.AZURE_STORAGE_ACCOUNT_URL`, `config.CORS_ORIGINS`,
+`keyVault.name`, `keyVault.tlsCertificateName`, `config.AZURE_STORAGE_ACCOUNT_URL`, `config.CORS_ORIGINS`,
 `config.ENTRA_*`, `ingress.host`, `ingress.tls.secretName`, and optionally
 `subscriptionsConfig` (JSON registered on start).
 
@@ -112,18 +139,19 @@ helm upgrade --install acip infrastructure/helm/acip -n acip \
 ```
 
 Order of operations:
-1. **pre-install / pre-upgrade hook** `acip-migrate` (`python -m app.cli migrate`) with its own
-   service account and SecretProviderClass;
-2. ConfigMap, ServiceAccount, SecretProviderClass, Deployments (backend, worker, frontend),
-   Services, Ingress, HPAs, PDBs, NetworkPolicies;
+1. **pre-install hook** `AzureKeyVaultSecret` `acip-db` (database URL), then **pre-install /
+   pre-upgrade hook** `acip-migrate` (`python -m app.cli migrate`) with its own service account;
+2. ConfigMap, ServiceAccount, `AzureKeyVaultSecret`s (TLS, email), Deployments (backend, worker,
+   frontend), Services, Ingress, HPAs, PDBs, NetworkPolicies;
 3. **post-install / post-upgrade hook** `acip-init` (`python -m app.cli init`: reference data,
    subscription registration; demo data only when `DEMO_MODE=true` — `false` in staging/prod).
 
 ## Ingress and TLS
 
 Default class `webapprouting.kubernetes.azure.com` (AKS application routing add-on, enabled by the
-Bicep). `/api` → backend:8000, `/` → frontend:3000. Provide the TLS certificate as Secret
-`ingress.tls.secretName` (e.g. Key Vault certificate via the app routing add-on, or cert-manager).
+Bicep). `/api` → backend:8000, `/` → frontend:3000. The TLS certificate is the Key Vault certificate
+`keyVault.tlsCertificateName`, synced by akv2k8s into Secret `ingress.tls.secretName`; leave
+`tlsCertificateName` empty to provide that Secret yourself (e.g. cert-manager).
 `ingress.className: nginx` works with ingress-nginx.
 
 ## Scaling
@@ -164,8 +192,8 @@ point-in-time backup.
 
 | Symptom | Check |
 |---|---|
-| Pods `CreateContainerConfigError: secret "acip-db" not found` | The CSI driver creates the Secret when a pod mounts the volume: check `kubectl describe pod` events for `secrets-store` mount errors, the vault name, the secret `acip-database-url`, Key Vault Secrets User role, and the federated credential. |
-| Migration hook fails with Key Vault 403 / AADSTS70021 | Federated credential missing for `system:serviceaccount:acip:acip-migrate`, or wrong issuer. |
+| Pods `CreateContainerConfigError: secret "acip-db" not found` | akv2k8s has not synced it yet: `kubectl -n acip get akvs` / `describe akvs acip-db`, controller logs (`kubectl -n akv2k8s logs deploy/akv2k8s-controller`), the vault name, the secret `acip-database-url`, and the controller identity's Key Vault role. |
+| Ingress serves the default certificate | `kubectl -n acip describe akvs acip-tls`: certificate name `keyVault.tlsCertificateName`, Key Vault Certificate User for the akv2k8s identity, Secret `ingress.tls.secretName` of type `kubernetes.io/tls`. |
 | Connection test: auth failed `AADSTS700016/70021` | Workload Identity federation or `serviceAccount.workloadIdentity.clientId`. |
 | Connection test: cost API 403 | Cost Management Reader missing on that subscription (`assign-roles.sh`). |
 | Storage check failed (403) | Storage Blob Data Reader missing, or `AZURE_STORAGE_ACCOUNT_URL` / container / export root folder wrong. |

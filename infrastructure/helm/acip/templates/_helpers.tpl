@@ -54,10 +54,6 @@ app.kubernetes.io/component: {{ .component }}
 {{- default (printf "%s-db" (include "acip.fullname" .)) .Values.database.secretName -}}
 {{- end -}}
 
-{{- define "acip.kvClientId" -}}
-{{- default .Values.serviceAccount.workloadIdentity.clientId .Values.keyVault.clientId -}}
-{{- end -}}
-
 {{/* Pod labels for workloads that need Azure access through Workload Identity */}}
 {{- define "acip.workloadIdentityLabel" -}}
 {{- if .Values.serviceAccount.workloadIdentity.enabled }}
@@ -80,14 +76,14 @@ env:
   - name: SMTP_PASSWORD
     valueFrom:
       secretKeyRef:
-        name: {{ include "acip.dbSecretName" . }}
+        name: {{ include "acip.fullname" . }}-smtp
         key: SMTP_PASSWORD
   {{- end }}
   {{- if and .Values.keyVault.enabled .Values.keyVault.graphMailSecretName }}
   - name: GRAPH_MAIL_CLIENT_SECRET
     valueFrom:
       secretKeyRef:
-        name: {{ include "acip.dbSecretName" . }}
+        name: {{ include "acip.fullname" . }}-graph-mail
         key: GRAPH_MAIL_CLIENT_SECRET
   {{- end }}
   - name: PYTHONDONTWRITEBYTECODE
@@ -110,14 +106,6 @@ env:
   configMap:
     name: {{ include "acip.fullname" . }}-subscriptions
 {{- end }}
-{{- if .Values.keyVault.enabled }}
-- name: secrets-store
-  csi:
-    driver: secrets-store.csi.k8s.io
-    readOnly: true
-    volumeAttributes:
-      secretProviderClass: {{ include "acip.fullname" . }}-kv
-{{- end }}
 {{- end -}}
 
 {{- define "acip.backendVolumeMounts" -}}
@@ -128,11 +116,6 @@ env:
 {{- if .Values.subscriptionsConfig.enabled }}
 - name: subscriptions-config
   mountPath: /config
-  readOnly: true
-{{- end }}
-{{- if .Values.keyVault.enabled }}
-- name: secrets-store
-  mountPath: /mnt/secrets-store
   readOnly: true
 {{- end }}
 {{- end -}}

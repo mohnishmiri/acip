@@ -16,7 +16,7 @@
 | Secret | Local | AKS |
 |---|---|---|
 | Collection identity | `AZURE_CLIENT_SECRET` in git-ignored `.env` | **No secret** — Workload Identity federation of the existing app registration |
-| Database URL | `.env` / compose defaults (local only) | Key Vault secret `acip-database-url`, synced by the Secrets Store CSI driver into Secret `<release>-db` |
+| Database URL | `.env` / compose defaults (local only) | Key Vault secret `acip-database-url`, synced by akv2k8s into Secret `<release>-db` |
 | TLS certificate | n/a | Kubernetes Secret referenced by the ingress (Key Vault / cert-manager) |
 
 - `.env`, `.env.*` (except `.env.example`), `config/subscriptions.json`, key/certificate files are

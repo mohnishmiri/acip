@@ -1,0 +1,3 @@
+./infrastructure/scripts/create-cost-exports.sh \
+  --storage-id /subscriptions/d1516897-3b06-465d-8d78-d1e572eb2e9c/resourceGroups/attcc-eastus2-stge-infra-rg/providers/Microsoft.Storage/storageAccounts/attcceastus2stgest --container cost-exports \
+  --subscriptions "169cc835-dd76-4007-a838-a1d9e66eb8d7 d1516897-3b06-465d-8d78-d1e572eb2e9c 2bf691d6-14fd-41ba-86c5-adf05e4c75e9 89a6e113-2a64-4345-adaf-00df466f5c86 718c4a13-bcef-476b-bfcd-1d14fd8c1f38 98bffe2c-5355-4a8d-b41d-26a1002b1926"

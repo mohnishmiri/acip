@@ -6,9 +6,9 @@
 #   ./federate-workload-identity.sh --app-id <client-id> --resource-group <rg> --cluster <aks> \
 #       [--namespace acip] [--release acip]
 #
-# Creates federated credentials for:
+# Creates a federated credential for:
 #   system:serviceaccount:<ns>:<release>          (API, worker, init job)
-#   system:serviceaccount:<ns>:<release>-migrate  (migration hook; reads Key Vault through the CSI driver)
+# The migration hook needs no Azure identity: Key Vault secrets reach it through akv2k8s.
 # Requires permission to update the app registration (Application Administrator or app owner).
 set -euo pipefail
 
@@ -30,7 +30,7 @@ ISSUER=$(az aks show -g "$RG" -n "$CLUSTER" --query oidcIssuerProfile.issuerUrl 
 [[ -z "$ISSUER" ]] && { echo "OIDC issuer not enabled on $CLUSTER" >&2; exit 1; }
 echo "OIDC issuer: $ISSUER"
 
-for SA in "$RELEASE" "$RELEASE-migrate"; do
+for SA in "$RELEASE"; do
   NAME="acip-${CLUSTER}-${NS}-${SA}"
   if az ad app federated-credential show --id "$APP_ID" --federated-credential-id "$NAME" -o none 2>/dev/null; then
     echo "  = $NAME already exists"

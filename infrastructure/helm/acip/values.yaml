@@ -1,7 +1,7 @@
 # Default values for the Azure Cost Intelligence Platform.
 # Environment overlays: values-dev.yaml, values-staging.yaml, values-prod.yaml.
 # No secret values belong in this file: the database URL comes from a Kubernetes Secret
-# (pre-created, or synced from Azure Key Vault by the Secrets Store CSI driver).
+# (pre-created, or synced from Azure Key Vault by akv2k8s).
 
 nameOverride: ""
 fullnameOverride: ""
@@ -98,18 +98,19 @@ database:
   secretName: ""
   secretKey: DATABASE_URL
 
-# Azure Key Vault via the Secrets Store CSI driver (AKS add-on azureKeyvaultSecretsProvider).
+# Azure Key Vault -> Kubernetes Secrets via akv2k8s (https://akv2k8s.io, AzureKeyVaultSecret CRD).
+# Requires the akv2k8s controller in the cluster; its identity needs get on secrets and certificates.
 keyVault:
   enabled: true
   name: "kv-acip-prod"
-  tenantId: "00000000-0000-0000-0000-000000000000"
-  # Identity used by the CSI driver; defaults to serviceAccount.workloadIdentity.clientId.
-  clientId: ""
-  # Key Vault secret name -> key in the synced Kubernetes Secret
+  # Key Vault secret holding the database URL -> Secret <fullname>-db (key database.secretKey)
   databaseUrlSecretName: acip-database-url
   # Optional Key Vault secret names for email credentials (leave empty when not used)
   smtpPasswordSecretName: ""
   graphMailSecretName: ""
+  # Key Vault certificate synced into ingress.tls.secretName (kubernetes.io/tls).
+  # Empty: create that Secret yourself.
+  tlsCertificateName: ""
 
 backend:
   replicas: 2

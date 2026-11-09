@@ -114,19 +114,6 @@ class _FileResult:
     mapping: Any = None
 
 
-class _HashingWriter(io.RawIOBase):
-    def __init__(self, fh, h):
-        self.fh, self.h, self.size = fh, h, 0
-
-    def write(self, b):  # type: ignore[override]
-        self.h.update(b)
-        self.size += len(b)
-        return self.fh.write(b)
-
-    def writable(self) -> bool:
-        return True
-
-
 # ---------------------------------------------------------------------------------------
 # partitions
 # ---------------------------------------------------------------------------------------
@@ -396,11 +383,12 @@ def process_run(
         downloaded: list[tuple[Any, str, str, int]] = []
         for i, b in enumerate(run.files):
             local = os.path.join(tmpdir, f"{i:04d}.dat")
-            h = hashlib.sha256()
+            # Parallel blob downloads need a seekable target, so hash after the file is complete.
             with open(local, "wb") as fh:
-                w = _HashingWriter(fh, h)
-                source.download_to(export_def.container, b.path, w)  # type: ignore[arg-type]
-            downloaded.append((b, local, h.hexdigest(), w.size))
+                source.download_to(export_def.container, b.path, fh)
+            with open(local, "rb") as fh:
+                digest = hashlib.file_digest(fh, "sha256").hexdigest()
+            downloaded.append((b, local, digest, os.path.getsize(local)))
 
         with sf() as db:
             seen = {

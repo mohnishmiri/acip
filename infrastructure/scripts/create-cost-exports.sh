@@ -21,6 +21,8 @@
 #     on the storage account; this script grants it (requires User Access Administrator / Owner there).
 # Verify the API version and body against current Microsoft documentation before production use.
 set -euo pipefail
+# Git Bash on Windows would otherwise rewrite /subscriptions/... arguments into C:/Program Files/Git/...
+export MSYS_NO_PATHCONV=1
 
 STORAGE_ID="" SUBS="" CONTAINER="cost-exports" LOCATION="eastus" API="2023-07-01-preview"
 while [[ $# -gt 0 ]]; do
@@ -63,7 +65,8 @@ JSON
   echo "  ✓ $name ($type, $timeframe, $recurrence) -> $CONTAINER/$folder"
   if [[ -n "$principal" ]]; then
     az role assignment create --assignee-object-id "$principal" --assignee-principal-type ServicePrincipal \
-      --role "Storage Blob Data Contributor" --scope "$STORAGE_ID" --only-show-errors -o none || true
+      --role "Storage Blob Data Contributor" --scope "$STORAGE_ID" --only-show-errors -o none \
+      || echo "  ! could not grant Storage Blob Data Contributor to $principal; the export cannot write until it is granted" >&2
   fi
 }
 
