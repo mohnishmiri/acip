@@ -86,6 +86,13 @@ env:
         name: {{ include "acip.fullname" . }}-graph-mail
         key: GRAPH_MAIL_CLIENT_SECRET
   {{- end }}
+  {{- if and .Values.keyVault.enabled .Values.keyVault.azureClientSecretName }}
+  - name: AZURE_CLIENT_SECRET
+    valueFrom:
+      secretKeyRef:
+        name: {{ include "acip.fullname" . }}-azure-client
+        key: AZURE_CLIENT_SECRET
+  {{- end }}
   - name: PYTHONDONTWRITEBYTECODE
     value: "1"
   {{- if .Values.subscriptionsConfig.enabled }}

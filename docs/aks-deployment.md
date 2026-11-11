@@ -117,10 +117,27 @@ Create the SPA and API app registrations and app roles as described in
 `docs/authentication.md`; set `config.ENTRA_*` in the values file. Add the redirect URI
 `https://<host>` to the SPA registration.
 
-## 6. Build and push images
+## 6. Build and push images (JFrog Artifactory)
+
+Images are built locally (Docker) and pushed to `artifact.it.att.com/<repo>`:
 
 ```bash
-./infrastructure/scripts/build-and-push.sh <acr-name> 1.0.0
+docker login artifact.it.att.com          # or: export JFROG_USER=<user> JFROG_TOKEN=<access token>
+./infrastructure/scripts/build-and-push.sh <artifactory-docker-repo> 1.0.0
+```
+
+AKS has no built-in access to Artifactory, so create a pull secret (token with read access to the
+repository) once per namespace and reference it in the values:
+
+```bash
+kubectl -n acip create secret docker-registry jfrog-pull --docker-server=artifact.it.att.com \
+  --docker-username=<user> --docker-password=<read-only token>
+```
+
+```yaml
+global:
+  imageRegistry: artifact.it.att.com/<artifactory-docker-repo>
+  imagePullSecrets: [{ name: jfrog-pull }]
 ```
 
 ## 7. Install / upgrade

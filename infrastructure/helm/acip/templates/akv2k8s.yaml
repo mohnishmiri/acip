@@ -65,6 +65,26 @@ spec:
       name: {{ $fullname }}-graph-mail
       dataKey: GRAPH_MAIL_CLIENT_SECRET
 {{- end }}
+{{- if .Values.keyVault.azureClientSecretName }}
+---
+# Collection service principal secret, only for config.AZURE_AUTH_MODE=client_secret
+apiVersion: spv.no/v2beta1
+kind: AzureKeyVaultSecret
+metadata:
+  name: {{ $fullname }}-azure-client
+  labels:
+    {{- include "acip.labels" . | nindent 4 }}
+spec:
+  vault:
+    name: {{ .Values.keyVault.name | quote }}
+    object:
+      name: {{ .Values.keyVault.azureClientSecretName | quote }}
+      type: secret
+  output:
+    secret:
+      name: {{ $fullname }}-azure-client
+      dataKey: AZURE_CLIENT_SECRET
+{{- end }}
 {{- if and .Values.ingress.enabled .Values.ingress.tls.enabled .Values.keyVault.tlsCertificateName }}
 ---
 # Ingress TLS certificate (Key Vault certificate -> kubernetes.io/tls Secret with tls.crt / tls.key)

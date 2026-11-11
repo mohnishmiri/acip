@@ -40,6 +40,10 @@ spec:
     spec:
       restartPolicy: Never
       serviceAccountName: {{ $fullname }}-migrate
+      {{- with .Values.global.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
       securityContext:
         {{- toYaml .Values.podSecurityContext | nindent 8 }}
       containers:
@@ -96,6 +100,10 @@ spec:
     spec:
       restartPolicy: Never
       serviceAccountName: {{ include "acip.serviceAccountName" . }}
+      {{- with .Values.global.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
       securityContext:
         {{- toYaml .Values.podSecurityContext | nindent 8 }}
       containers:

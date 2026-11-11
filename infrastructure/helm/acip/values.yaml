@@ -7,17 +7,19 @@ nameOverride: ""
 fullnameOverride: ""
 
 global:
-  # Registry prefix, e.g. "acracipprod.azurecr.io". AKS pulls from ACR via the kubelet identity (AcrPull).
-  imageRegistry: ""
-  imagePullSecrets: []
+  # Registry prefix incl. the Artifactory Docker repo, e.g. "artifact.it.att.com/acip-docker"
+  # (as printed by infrastructure/scripts/build-and-push.sh).
+  imageRegistry: "artifact.it.att.com:22609"
+  # Pull secret(s) for JFrog, e.g. [{ name: regcred }] -- see docs/aks-deployment.md §6.
+  imagePullSecrets: [{ name: regcred }]
 
 image:
   backend:
-    repository: acip-backend
+    repository: apm0014313-dkr-attcc-stage/com.att.attcc/acip-backend
     tag: "1.0.0"
     pullPolicy: IfNotPresent
   frontend:
-    repository: acip-frontend
+    repository: apm0014313-dkr-attcc-stage/com.att.attcc/acip-frontend
     tag: "1.0.0"
     pullPolicy: IfNotPresent
 
@@ -31,28 +33,30 @@ serviceAccount:
   workloadIdentity:
     enabled: true
     # Client (application) id of the existing collection app registration / service principal.
-    clientId: "00000000-0000-0000-0000-000000000000"
-    tenantId: "00000000-0000-0000-0000-000000000000"
+    clientId: "68a52619-4061-448c-8264-922aedba1b5b"
+    tenantId: "e741d71c-c6b6-47b0-803c-0f3b32b07556"
 
 # Non-secret runtime configuration (rendered into a ConfigMap). Names match backend/app/core/config.py.
 config:
   APP_ENV: production
   LOG_LEVEL: INFO
-  LOG_FORMAT: json
+  LOG_FORMAT: text
   CORS_ORIGINS: "https://acip.example.com"
   DEMO_MODE: "false"
   # Application user sign-in (Entra ID) -- separate identity from the collection service principal
   APP_AUTH_MODE: entra
-  ENTRA_TENANT_ID: "00000000-0000-0000-0000-000000000000"
-  ENTRA_API_CLIENT_ID: "00000000-0000-0000-0000-000000000000"
-  ENTRA_API_AUDIENCE: ""
-  ENTRA_SPA_CLIENT_ID: "00000000-0000-0000-0000-000000000000"
-  ENTRA_API_SCOPE: "api://00000000-0000-0000-0000-000000000000/access_as_user"
-  # Cost collection (existing service principal via Workload Identity).
-  # AZURE_CLIENT_ID / AZURE_TENANT_ID / AZURE_FEDERATED_TOKEN_FILE are injected by the
-  # workload identity webhook, so they are intentionally not set here.
-  AZURE_AUTH_MODE: workload_identity
-  AZURE_STORAGE_ACCOUNT_URL: "https://<storageaccount>.blob.core.windows.net"
+  ENTRA_TENANT_ID: "e741d71c-c6b6-47b0-803c-0f3b32b07556"
+  ENTRA_API_CLIENT_ID: "68a52619-4061-448c-8264-922aedba1b5b"
+  ENTRA_API_AUDIENCE: "api://68a52619-4061-448c-8264-922aedba1b5b"
+  ENTRA_SPA_CLIENT_ID: "68a52619-4061-448c-8264-922aedba1b5b"
+  ENTRA_API_SCOPE: "api://68a52619-4061-448c-8264-922aedba1b5b/access_as_user"
+  # Cost collection identity. workload_identity: AZURE_CLIENT_ID / AZURE_TENANT_ID are injected by the
+  # workload identity webhook. client_secret (cluster without Workload Identity): set both here and
+  # keyVault.azureClientSecretName.
+  AZURE_AUTH_MODE: client_secret
+  AZURE_TENANT_ID: "e741d71c-c6b6-47b0-803c-0f3b32b07556"
+  AZURE_CLIENT_ID: "68a52619-4061-448c-8264-922aedba1b5b"
+  AZURE_STORAGE_ACCOUNT_URL: "https://attcceastus2stgest.blob.core.windows.net"
   AZURE_COST_EXPORT_CONTAINER: cost-exports
   EXPORT_SOURCE: azure_blob
   LOCAL_EXPORT_ROOT: /data/exports
@@ -70,14 +74,14 @@ config:
   DB_STATEMENT_TIMEOUT_MS: "60000"
   # Alert emails: disabled | smtp | graph. SMTP_PASSWORD / GRAPH_MAIL_CLIENT_SECRET come from Key Vault
   # (keyVault.smtpPasswordSecretName / keyVault.graphMailSecretName), never from this file.
-  EMAIL_PROVIDER: disabled
-  EMAIL_FROM_ADDRESS: "acip-alerts@contoso.com"
+  EMAIL_PROVIDER: smtp
+  EMAIL_FROM_ADDRESS: "m55663-ap@mta01.att-mail.com"
   EMAIL_FROM_NAME: "Azure Cost Intelligence"
   EMAIL_REPLY_TO: ""
-  SMTP_HOST: "smtp.office365.com"
-  SMTP_PORT: "587"
+  SMTP_HOST: "mta01.az.3pc.att.com"
+  SMTP_PORT: "19828"
   SMTP_SECURITY: starttls
-  SMTP_USERNAME: ""
+  SMTP_USERNAME: "m55663-ap@mta01.att-mail.com"
   GRAPH_MAIL_TENANT_ID: ""
   GRAPH_MAIL_CLIENT_ID: ""
   GRAPH_MAIL_SENDER: ""
@@ -106,11 +110,14 @@ keyVault:
   # Key Vault secret holding the database URL -> Secret <fullname>-db (key database.secretKey)
   databaseUrlSecretName: acip-database-url
   # Optional Key Vault secret names for email credentials (leave empty when not used)
-  smtpPasswordSecretName: ""
+  smtpPasswordSecretName: "acip-smtp-password"
   graphMailSecretName: ""
   # Key Vault certificate synced into ingress.tls.secretName (kubernetes.io/tls).
   # Empty: create that Secret yourself.
   tlsCertificateName: ""
+  # Key Vault secret with the collection service principal's client secret -> AZURE_CLIENT_SECRET.
+  # Only for config.AZURE_AUTH_MODE=client_secret (clusters without Workload Identity); else leave empty.
+  azureClientSecretName: "acip-azure-client-secret"
 
 backend:
   replicas: 2
@@ -185,7 +192,7 @@ init:
 ingress:
   enabled: true
   # AKS application routing add-on: webapprouting.kubernetes.azure.com ; or "nginx"
-  className: webapprouting.kubernetes.azure.com
+  className: nginx
   host: acip.example.com
   annotations: {}
   tls:
